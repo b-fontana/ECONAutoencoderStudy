@@ -27,7 +27,7 @@ def matching(event):
         return event.cl3d_pt==event.cl3d_pt.max()
     else:
         cond_a = event.matches==True
-        cond_b = event.cl3d_pt==event[event.matches==True].cl3d_pt.max()
+        cond_b = event.cl3d_pt==event[cond_a].cl3d_pt.max()
         return (cond_a&cond_b)
 
 def openroot(files, algo_trees, gen_tree):

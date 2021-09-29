@@ -45,7 +45,7 @@ def prepare_configs(name, batches, output_dir, algo_trees, gen_tree, threshold, 
             print('reachedEE={}\n'.format(reachedEE), file=param)
             print('output_file_name="{0}/{1}_{2}.hdf5"'.format(output_dir, name, i), file=param)
 
-def prepare_submit(name, batches, output_dir):
+def prepare_submit(name, batches, output_dir, mod_matching):
     current = os.getcwd()
     for i in batches:
         sub_file_name = '{0}/jobs/{1}_{2}.sub'.format(output_dir, name, i)
@@ -53,10 +53,13 @@ def prepare_submit(name, batches, output_dir):
         with open(sub_file_name, 'w') as script:
             print ('#! /bin/bash', file=script)
             print ('uname -a', file=script)
-            print('python --version', file=script)
-            print('which python', file=script)
+            print('python3 --version', file=script)
+            print('which python3', file=script)
             print ('cd', output_dir+'/configs', file=script)
-            print ('python {0}/matching.py --cfg {1} &> {2}_{3}.log'.format(current, config_file_name, name, i), file=script)
+            if mod_matching:
+                print ('python3 {0}/matching_v2.py --cfg {1} &> {2}_{3}.log'.format(current, config_file_name, name, i), file=script)
+            else:
+                print ('python3 {0}/matching.py --cfg {1} &> {2}_{3}.log'.format(current, config_file_name, name, i), file=script)
         st=os.stat(sub_file_name)
         os.chmod(sub_file_name, st.st_mode | 0o744)
 
@@ -70,6 +73,7 @@ def prepare_jobs(param, batches_elec, batches_pions, batches_photons):
     threshold = param.threshold
     output_dir=param.output_dir
     bestmatch_only = param.bestmatch_only
+    mod_matching = param.mod_matching
     #
     version=job_version(output_dir)
     elec_dir=output_dir+'/'+version+'/electrons'
@@ -89,13 +93,13 @@ def prepare_jobs(param, batches_elec, batches_pions, batches_photons):
         os.makedirs(photons_dir+'/jobs')
         os.makedirs(photons_dir+'/logs')
     prepare_configs('electrons', batches_elec, elec_dir, algo_trees, gen_tree, threshold, bestmatch_only, reachedEE=2)
-    prepare_submit('electrons', batches_elec, elec_dir)
+    prepare_submit('electrons', batches_elec, elec_dir, mod_matching)
     if len(files_pions)>0:
         prepare_configs('pions', batches_pions, pions_dir, algo_trees, gen_tree, threshold, bestmatch_only, reachedEE=2)
-        prepare_submit('pions', batches_pions, pions_dir)
+        prepare_submit('pions', batches_pions, pions_dir, mod_matching)
     if len(files_photons)>0:
         prepare_configs('photons', batches_photons, photons_dir, algo_trees, gen_tree, threshold, bestmatch_only, reachedEE=2)
-        prepare_submit('photons', batches_photons, photons_dir)
+        prepare_submit('photons', batches_photons, photons_dir, mod_matching)
     return elec_dir, pions_dir, photons_dir
     
 

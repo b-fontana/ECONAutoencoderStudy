@@ -34,6 +34,7 @@ def create_dataframes(files, algo_trees, gen_tree):
     algos = {}
     branches_gen=['event','genpart_pid','genpart_exphi', 'genpart_exeta','genpart_gen',
                   'genpart_reachedEE', 'genpart_pt', 'genpart_energy']
+
     branches_cl3d=['event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi','cl3d_showerlength','cl3d_coreshowerlength',
                    'cl3d_firstlayer','cl3d_maxlayer','cl3d_seetot','cl3d_spptot','cl3d_szz', 'cl3d_srrtot',
                    'cl3d_srrmean', 'cl3d_hoe', 'cl3d_meanz', 'cl3d_layer10', 'cl3d_layer50', 'cl3d_layer90', 

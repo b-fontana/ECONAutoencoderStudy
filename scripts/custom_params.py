@@ -29,6 +29,7 @@ else:
 
 # Pick one of the different algos trees to retrieve the gen information
 gen_tree = 'FloatingpointThresholdDummyHistomaxnoareath20Genclustersntuple/HGCalTriggerNtuple'
+
 # Store only information on the best match
 bestmatch_only = True
 

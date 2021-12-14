@@ -29,18 +29,19 @@ def matching(event):
         cond_b = event.cl3d_pt==event[cond_a].cl3d_pt.max()
         return (cond_a&cond_b)
 
-def openroot(files, algo_trees, gen_tree):
+def create_dataframes(files, algo_trees, gen_tree):
     gens = []
     algos = {}
     branches_gen=['event','genpart_pid','genpart_exphi', 'genpart_exeta','genpart_gen',
                   'genpart_reachedEE', 'genpart_pt', 'genpart_energy']
-    branches_cl3d=['event','cl3d_pt','cl3d_eta','cl3d_phi','cl3d_showerlength','cl3d_coreshowerlength',
+    branches_cl3d=['event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi','cl3d_showerlength','cl3d_coreshowerlength',
                    'cl3d_firstlayer','cl3d_maxlayer','cl3d_seetot','cl3d_spptot','cl3d_szz', 'cl3d_srrtot',
                    'cl3d_srrmean', 'cl3d_hoe', 'cl3d_meanz', 'cl3d_layer10', 'cl3d_layer50', 'cl3d_layer90', 
                    'cl3d_ntc67', 'cl3d_ntc90']
     
     for filename in files:
-        gens.append(uproot.open(filename)[gen_tree].arrays(branches_gen, library='pd'))
+        with uproot.open(filename) as data:
+            gens.append(data[gen_tree].arrays(branches_gen, library='pd'))
         for algo_name, algo_tree in algo_trees.items():
             if not algo_name in algos:
                 algos[algo_name] = []
@@ -57,49 +58,37 @@ def openroot(files, algo_trees, gen_tree):
     return(df_gen, df_algos)
 
 def preprocessing(param):
-    print(param.threshold)
-    quit()
+    files            = param.files_photons
+    threshold        = param.threshold
+    gen_tree         = param.gen_tree
+    algo_trees       = param.algo_trees
+    output_file_name = param.output_file_name
+    bestmatch_only   = param.bestmatch_only
+    reachedEE        = param.reachedEE
 
-    files=param.files
-    threshold=param.threshold
-    algo_trees=param.algo_trees
-    gen_tree=param.gen_tree
-    output_file_name=param.output_file_name
-    bestmatch_only = param.bestmatch_only
-    reachedEE = param.reachedEE
-
-    gen,algo=openroot(files, algo_trees, gen_tree)
+    gen, algo = create_dataframes(files, algo_trees, gen_tree)
     n_rec={}
     algo_clean={}
-    
+
     # clean particles that are not generator-level or didn't reach endcap
-    sel=gen['genpart_reachedEE']==reachedEE 
-    gen_clean=gen[sel]
-    sel=gen_clean['genpart_gen']!=-1
-    gen_clean=gen_clean[sel]
+    gen_clean = gen[ gen['genpart_reachedEE']==reachedEE ]
+    gen_clean = gen_clean[ gen_clean['genpart_gen']!=-1 ]
 
     # split df_gen_clean in two, one collection for each endcap
-    sel1=gen_clean['genpart_exeta']<=0
-    sel2=gen_clean['genpart_exeta']>0
-    gen_neg=gen_clean[sel1]
-    gen_pos=gen_clean[sel2]
+    gen_neg = gen_clean[ gen_clean['genpart_exeta']<=0 ]
+    gen_pos = gen_clean[ gen_clean['genpart_exeta']>0  ]
 
     gen_pos.set_index('event', inplace=True)
     gen_neg.set_index('event', inplace=True)
-    
+
     for algo_name,df_algo in algo.items():
         # split clusters in two, one collection for each endcap
-        sel1=df_algo['cl3d_eta']<=0
-        sel2=df_algo['cl3d_eta']>0
-        algo_neg=df_algo[sel1]
-        algo_pos=df_algo[sel2]
+        algo_neg = df_algo[ df_algo['cl3d_eta']<=0 ]
+        algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
 
         #set the indices
         algo_pos.set_index('event', inplace=True)
         algo_neg.set_index('event', inplace=True)
-
-        print(gen_pos)
-        print(algo_name, '(initial gen)', gen_pos.shape[0], gen_neg.shape[0])
 
         #merging gen columns and cluster columns
         algo_pos_merged=gen_pos.join(algo_pos, how='left', rsuffix='_algo')
@@ -137,8 +126,8 @@ def preprocessing(param):
         #         best match could be:
         #              - Unmatched cluster with highest pT if no dr-matched cluster in evt
         #              - Matched cluster with highest pT *among dr-matched clusters*
-        group=algo_pos_merged.groupby('event')
-        
+        group=algo_pos_merged.groupby('event') # required when dealing with pile-up
+
         n_rec_pos=group['cl3d_pt'].size()
         algo_pos_merged['best_match']=group.apply(matching).array
         group=algo_neg_merged.groupby('event')

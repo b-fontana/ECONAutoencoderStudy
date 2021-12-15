@@ -9,6 +9,10 @@ from datetime import date
 import optparse
 from itertools import chain
 
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', None)
 # remove annoying warning polluting logs
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -29,19 +33,23 @@ def matching(event):
         cond_b = event.cl3d_pt==event[cond_a].cl3d_pt.max()
         return (cond_a&cond_b)
 
-def create_dataframes(files, algo_trees, gen_tree):
+def create_dataframes(files, algo_trees, gen_tree, p):
     gens = []
     algos = {}
-    branches_gen=['event','genpart_pid','genpart_exphi', 'genpart_exeta','genpart_gen',
-                  'genpart_reachedEE', 'genpart_pt', 'genpart_energy']
+    branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
+    branches_cl3d = [ 'event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
+    #branches_tc = [ 'tc_layer', 'tc_phi', 'tc_eta', 'tc_x', 'tc_y', 'tc_z' ]
+    #branches_gen.extend( branches_tc )
 
-    branches_cl3d=['event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi','cl3d_showerlength','cl3d_coreshowerlength',
-                   'cl3d_firstlayer','cl3d_maxlayer','cl3d_seetot','cl3d_spptot','cl3d_szz', 'cl3d_srrtot',
-                   'cl3d_srrmean', 'cl3d_hoe', 'cl3d_meanz', 'cl3d_layer10', 'cl3d_layer50', 'cl3d_layer90', 
-                   'cl3d_ntc67', 'cl3d_ntc90']
-    
+    # gen_cut = ( '(genpart_reachedEE==' + str(p.reachedEE) + ') & ' +
+    #             '(genpart_gen!=-1) & (genpart_pid==22)' )
+    gen_cut = 'gen_eta>0'
     for filename in files:
-        with uproot.open(filename) as data:
+        with uproot.open(filename + ':' + gen_tree) as data:
+            for batch in data.iterate(branches_gen, step_size="1 kB", library='pd'):
+                print(batch)
+                quit()
+
             gens.append(data[gen_tree].arrays(branches_gen, library='pd'))
         for algo_name, algo_tree in algo_trees.items():
             if not algo_name in algos:
@@ -56,7 +64,7 @@ def create_dataframes(files, algo_trees, gen_tree):
     df_gen = pd.concat(gens)
     for algo_name, dfs in algos.items():
         df_algos[algo_name] = pd.concat(dfs)
-    return(df_gen, df_algos)
+    return(df_gen, df_algos )
 
 def preprocessing(param):
     files            = param.files_photons
@@ -67,49 +75,54 @@ def preprocessing(param):
     bestmatch_only   = param.bestmatch_only
     reachedEE        = param.reachedEE
 
-    gen, algo = create_dataframes(files, algo_trees, gen_tree)
+    print("before creation")
+    gen, algo = create_dataframes(files, algo_trees, gen_tree, param)
+    print("after creation")
     n_rec={}
     algo_clean={}
 
     # clean particles that are not generator-level or didn't reach endcap
-    gen_clean = gen[ gen['genpart_reachedEE']==reachedEE ]
-    gen_clean = gen_clean[ gen_clean['genpart_gen']!=-1 ]
+    # gen_clean = gen[ gen['genpart_reachedEE']==reachedEE ]
+    # gen_clean = gen_clean[ gen_clean['genpart_gen']!=-1 ]
+    # gen_clean = gen_clean[ gen_clean['genpart_pid']==22 ]
 
     # split df_gen_clean in two, one collection for each endcap
-    gen_neg = gen_clean[ gen_clean['genpart_exeta']<=0 ]
-    gen_pos = gen_clean[ gen_clean['genpart_exeta']>0  ]
-
+    #gen_neg = gen_clean[ gen_clean['genpart_exeta']<=0 ]
+    gen_pos = gen[ gen_clean['genpart_exeta']>0  ]
     gen_pos.set_index('event', inplace=True)
-    gen_neg.set_index('event', inplace=True)
+    #gen_neg.set_index('event', inplace=True)
+
+    print(gen_pos.head())
+    quit()
 
     for algo_name,df_algo in algo.items():
         # split clusters in two, one collection for each endcap
         algo_neg = df_algo[ df_algo['cl3d_eta']<=0 ]
-        algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
+        #algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
 
         #set the indices
         algo_pos.set_index('event', inplace=True)
-        algo_neg.set_index('event', inplace=True)
+        #algo_neg.set_index('event', inplace=True)
 
         #merging gen columns and cluster columns
         algo_pos_merged=gen_pos.join(algo_pos, how='left', rsuffix='_algo')
-        algo_neg_merged=gen_neg.join(algo_neg, how='left', rsuffix='_algo')
+        #algo_neg_merged=gen_neg.join(algo_neg, how='left', rsuffix='_algo')
 
         # compute deltar
         algo_pos_merged['deltar']=deltar(algo_pos_merged)
-        algo_neg_merged['deltar']=deltar(algo_neg_merged)
+        #algo_neg_merged['deltar']=deltar(algo_neg_merged)
 
         #keep track of the unmatched values (NaN) (ie: gen part here, but no cl3d)
         sel=pd.isna(algo_pos_merged['deltar']) 
         unmatched_pos=algo_pos_merged[sel]
         algo_pos_merged=algo_pos_merged[~sel]
 
-        sel=pd.isna(algo_neg_merged['deltar'])  
-        unmatched_neg=algo_neg_merged[sel]
-        algo_neg_merged=algo_neg_merged[~sel]
+        #sel=pd.isna(algo_neg_merged['deltar'])  
+        #unmatched_neg=algo_neg_merged[sel]
+        #algo_neg_merged=algo_neg_merged[~sel]
 
         unmatched_pos.loc[:,'matches']=False
-        unmatched_neg.loc[:,'matches']=False
+        #unmatched_neg.loc[:,'matches']=False
 
         #select deltar under threshold
         # /!\ LP: doing so, some entire events may be removed if they have a single cl3d (it should be marked 'unmatched'?)
@@ -120,7 +133,7 @@ def preprocessing(param):
 
         #could be better:
         algo_pos_merged['matches'] = algo_pos_merged.deltar<=threshold
-        algo_neg_merged['matches'] = algo_neg_merged.deltar<=threshold
+        #algo_neg_merged['matches'] = algo_neg_merged.deltar<=threshold
 
         #matching
         # /!\ LP: but then, we want to remove only clusters that aren't "best match"
@@ -128,27 +141,27 @@ def preprocessing(param):
         #              - Unmatched cluster with highest pT if no dr-matched cluster in evt
         #              - Matched cluster with highest pT *among dr-matched clusters*
         group=algo_pos_merged.groupby('event') # required when dealing with pile-up
-
         n_rec_pos=group['cl3d_pt'].size()
         algo_pos_merged['best_match']=group.apply(matching).array
-        group=algo_neg_merged.groupby('event')
-        n_rec_neg=group['cl3d_pt'].size()
-        algo_neg_merged['best_match']=group.apply(matching).array
+        #group=algo_neg_merged.groupby('event')
+        #n_rec_neg=group['cl3d_pt'].size()
+        #algo_neg_merged['best_match']=group.apply(matching).array
 
         #keep matched clusters only
         if bestmatch_only:
             sel=algo_pos_merged['best_match']==True
             algo_pos_merged=algo_pos_merged[sel]
 
-            sel=algo_neg_merged['best_match']==True
-            algo_neg_merged=algo_neg_merged[sel]
+            #sel=algo_neg_merged['best_match']==True
+            #algo_neg_merged=algo_neg_merged[sel]
 
         #remerge with NaN values
         algo_pos_merged=pd.concat([algo_pos_merged, unmatched_pos], sort=False)
-        algo_neg_merged=pd.concat([algo_neg_merged, unmatched_neg], sort=False)
+        #algo_neg_merged=pd.concat([algo_neg_merged, unmatched_neg], sort=False)
 
         n_rec[algo_name]=n_rec_pos.append(n_rec_neg)
-        algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
+        #algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
+        algo_clean[algo_name]=algo_pos_merged.sort_values('event')
         
         print(algo_name, algo_clean[algo_name].shape[0])
 

@@ -3,16 +3,17 @@
 import numpy as np
 import pandas as pd
 import os
+import tqdm
 import sys
 import uproot # uproot4
 from datetime import date
 import optparse
 from itertools import chain
 
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', None)
-pd.set_option('display.max_colwidth', None)
+# pd.set_option('display.max_rows', None)
+# pd.set_option('display.max_columns', None)
+# pd.set_option('display.width', None)
+# pd.set_option('display.max_colwidth', None)
 # remove annoying warning polluting logs
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -34,42 +35,62 @@ def matching(event):
         return (cond_a&cond_b)
 
 def create_dataframes(files, algo_trees, gen_tree, p):
-    gens = []
     algos = {}
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
-    branches_cl3d = [ 'event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    branches_tc = [ 'tc_layer', 'tc_phi', 'tc_eta', 'tc_x', 'tc_y', 'tc_z' ]
-    branches_gen.extend( branches_tc )
+    branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
+    branches_tc = [ 'event', 'tc_layer', 'tc_x', 'tc_y', 'tc_z' ]
 
+    batches_gen, batches_tc = ([] for _ in range(2))
+    memsize_gen, memsize_tc = '128 MB', '32 MB'
     for filename in files:
-        print(filename + ':' + gen_tree)
         with uproot.open(filename + ':' + gen_tree) as data:
-            for batch in data.iterate(branches_gen, step_size="1 kB", library='pd'):
-                for b in batch:
-                    print(b)
-                    print('====================')
-                quit()
-
+            #print( data.num_entries_for(memsize, expressions=branches_tc) )
+            for ib,batch in enumerate(data.iterate(branches_gen, step_size=memsize_gen,
+                                                   library='pd')):
                 batch = batch[ batch['genpart_reachedEE']==p.reachedEE ]
                 batch = batch[ batch['genpart_gen']!=-1 ]
                 batch = batch[ batch['genpart_pid']==22 ]
+                batch = batch.drop(columns=['genpart_reachedEE', 'genpart_gen', 'genpart_pid'])
+                batch = batch[ batch['genpart_exeta']>0  ] #positive endcap only
+                batch.set_index('event', inplace=True)
+                batches_gen.append(batch)
+                print('Step {}: +{} generated data processed.'.format(ib,memsize_gen))
 
-            gens.append(data[gen_tree].arrays(branches_gen, library='pd'))
-        for algo_name, algo_tree in algo_trees.items():
-            if not algo_name in algos:
-                algos[algo_name] = []
-            tree = uproot.open(filename)[algo_tree]
-            df_cl = tree.arrays(branches_cl3d, library='pd')
-            # Trick to read layers pTs, which is a vector of vector
-            df_cl['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
-            algos[algo_name].append(df_cl)
+            for batch in data.iterate(branches_tc, step_size=memsize_tc,
+                                      library='pd'):
+                batch.set_index('event', inplace=True)
+                batches_tc.append(batch)
+                print('Step {}: +{} trigger cells data processed.'.format(ib,memsize_tc))
+
+    df_gen = pd.concat(batches_gen)
+    df_tc = pd.concat(batches_tc)
+
+    """ This concatenation looks like:
+       genpart_exphi  genpart_exeta  genpart_energy  tc_layer       tc_x        tc_y        tc_z
+event                                                                                           
+5           0.972961       -1.75371       47.971615      29.0  63.632179  112.073677 -367.699005
+5           0.972961       -1.75371       47.971615      21.0 -56.870522 -106.310326  351.802765
+5           0.972961       -1.75371       47.971615      19.0 -63.112049 -107.511497  348.832764
+5           0.972961       -1.75371       47.971615       3.0 -67.323067  -95.413071  325.072754
+(...)
+6
+(...)
+    """
+    
+    for algo_name, algo_tree in algo_trees.items():
+        if not algo_name in algos:
+            algos[algo_name] = []
+        tree = uproot.open(filename)[algo_tree]
+        df_cl = tree.arrays(branches_cl3d, library='pd')
+        # Trick to read layers pTs, which is a vector of vector
+        df_cl['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
+        algos[algo_name].append(df_cl)
         
     df_algos = {}
-    df_gen = pd.concat(gens)
     for algo_name, dfs in algos.items():
         df_algos[algo_name] = pd.concat(dfs)
-    return(df_gen, df_algos )
+    return(df_gen, df_algos, df_tc )
 
 def preprocessing(param):
     files            = param.files_photons
@@ -80,37 +101,26 @@ def preprocessing(param):
     bestmatch_only   = param.bestmatch_only
     reachedEE        = param.reachedEE
 
-    print("before creation")
-    gen, algo = create_dataframes(files, algo_trees, gen_tree, param)
-    print("after creation")
-    n_rec={}
-    algo_clean={}
+    gen, algo, tc = create_dataframes(files, algo_trees, gen_tree, param)
 
-    # clean particles that are not generator-level or didn't reach endcap
-    # gen_clean = gen[ gen['genpart_reachedEE']==reachedEE ]
-    # gen_clean = gen_clean[ gen_clean['genpart_gen']!=-1 ]
-    # gen_clean = gen_clean[ gen_clean['genpart_pid']==22 ]
+    algo_clean={}
 
     # split df_gen_clean in two, one collection for each endcap
     #gen_neg = gen_clean[ gen_clean['genpart_exeta']<=0 ]
-    gen_pos = gen[ gen_clean['genpart_exeta']>0  ]
-    gen_pos.set_index('event', inplace=True)
-    #gen_neg.set_index('event', inplace=True)
-
-    print(gen_pos.head())
-    quit()
-
+    #gen_pos = gen[ gen['genpart_exeta']>0  ]
+    #df_gen = df_gen.join(pd.concat(batches_tc), how='left', rsuffix='_tc')
+    
     for algo_name,df_algo in algo.items():
         # split clusters in two, one collection for each endcap
-        algo_neg = df_algo[ df_algo['cl3d_eta']<=0 ]
-        #algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
+        algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
+        #algo_neg = df_algo[ df_algo['cl3d_eta']<=0 ]
 
         #set the indices
         algo_pos.set_index('event', inplace=True)
         #algo_neg.set_index('event', inplace=True)
 
         #merging gen columns and cluster columns
-        algo_pos_merged=gen_pos.join(algo_pos, how='left', rsuffix='_algo')
+        algo_pos_merged=gen.join(algo_pos, how='left', rsuffix='_algo')
         #algo_neg_merged=gen_neg.join(algo_neg, how='left', rsuffix='_algo')
 
         # compute deltar
@@ -146,10 +156,8 @@ def preprocessing(param):
         #              - Unmatched cluster with highest pT if no dr-matched cluster in evt
         #              - Matched cluster with highest pT *among dr-matched clusters*
         group=algo_pos_merged.groupby('event') # required when dealing with pile-up
-        n_rec_pos=group['cl3d_pt'].size()
         algo_pos_merged['best_match']=group.apply(matching).array
         #group=algo_neg_merged.groupby('event')
-        #n_rec_neg=group['cl3d_pt'].size()
         #algo_neg_merged['best_match']=group.apply(matching).array
 
         #keep matched clusters only
@@ -164,15 +172,14 @@ def preprocessing(param):
         algo_pos_merged=pd.concat([algo_pos_merged, unmatched_pos], sort=False)
         #algo_neg_merged=pd.concat([algo_neg_merged, unmatched_neg], sort=False)
 
-        n_rec[algo_name]=n_rec_pos.append(n_rec_neg)
         #algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
         algo_clean[algo_name]=algo_pos_merged.sort_values('event')
-        
+
+        algo_clean[algo_name] = algo_clean[algo_name].join(tc, how='left', rsuffix='_algo')
         print(algo_name, algo_clean[algo_name].shape[0])
 
     #save files to savedir in HDF
     store = pd.HDFStore(output_file_name, mode='w')
-    store['gen_clean'] = gen_clean
     for algo_name, df in algo_clean.items():
         store[algo_name] = df
     store.close()

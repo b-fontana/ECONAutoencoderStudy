@@ -40,7 +40,7 @@ else:
     file_per_batch_electrons = 5
     file_per_batch_pions = 2
     file_per_batch_photons = 2
-output_file_name = 'out.hdf5'
+output_file_name = 'gen_cl3d_tc.hdf5'
 
 # List of ECON algorithms
 fes = [ 'Threshold' ]

@@ -36,19 +36,24 @@ def matching(event):
 def create_dataframes(files, algo_trees, gen_tree, p):
     gens = []
     algos = {}
-    branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
+    branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
+                     'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event','cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    #branches_tc = [ 'tc_layer', 'tc_phi', 'tc_eta', 'tc_x', 'tc_y', 'tc_z' ]
-    #branches_gen.extend( branches_tc )
+    branches_tc = [ 'tc_layer', 'tc_phi', 'tc_eta', 'tc_x', 'tc_y', 'tc_z' ]
+    branches_gen.extend( branches_tc )
 
-    # gen_cut = ( '(genpart_reachedEE==' + str(p.reachedEE) + ') & ' +
-    #             '(genpart_gen!=-1) & (genpart_pid==22)' )
-    gen_cut = 'gen_eta>0'
     for filename in files:
+        print(filename + ':' + gen_tree)
         with uproot.open(filename + ':' + gen_tree) as data:
             for batch in data.iterate(branches_gen, step_size="1 kB", library='pd'):
-                print(batch)
+                for b in batch:
+                    print(b)
+                    print('====================')
                 quit()
+
+                batch = batch[ batch['genpart_reachedEE']==p.reachedEE ]
+                batch = batch[ batch['genpart_gen']!=-1 ]
+                batch = batch[ batch['genpart_pid']==22 ]
 
             gens.append(data[gen_tree].arrays(branches_gen, library='pd'))
         for algo_name, algo_tree in algo_trees.items():

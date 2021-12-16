@@ -35,6 +35,20 @@ class dotDict(dict):
 #unicodes
 UC = dotDict( dict(phi='\u03A6',) )
 
+def set_figure_props(p, bincenters):
+    p.axis.axis_line_color = 'black'
+    p.axis.major_tick_line_color = 'black'
+    p.axis.major_label_text_font_size = '10px'
+    p.axis.major_label_standoff = 2
+    #p.xaxis.major_label_orientation = 1.0
+    p.xaxis.axis_label = r"$$\color{black} \phi$$"
+    p.yaxis.axis_label = '$$R/z$$'
+    p.yaxis.major_label_overrides = {dig: label for dig,label in enumerate(bincenters)}
+    
+    p.hover.tooltips = [
+        ("#hits", "@{nhits}"),
+    ]
+
 #########################################################################
 ################### PARSER ############################
 #########################################################################
@@ -55,13 +69,12 @@ FLAGS = parser.parse_args()
 #########################################################################
 ################### CONFIGURATION PARAMETERS ############################
 #########################################################################
-NEVENTS = 3
+NEVENTS = 10
 NBINSRZ = 42
 NBINSPHI = FLAGS.nphibins
 
 filename = 'gen_cl3d_tc.hdf5'
-filefolder = 'Documents/FPGAs/'
-base_path = os.path.join(os.environ['HOME'], filefolder)
+base_path = os.environ['PWD']
 data_path = os.path.join(base_path, 'data')
 
 vnames = dotDict( dict( RoverZ = 'Rz',
@@ -90,15 +103,24 @@ b = bkp.BokehPlot( os.path.join(base_path, 'plots', 'clustersDistribution.html')
                    nfigs=3, nframes=len(fes) )
 
 #########################################################################
+################### PLOT CONFIGURATION PARAMETERS #######################
+#########################################################################
+mypalette = _palette(40)    
+shifth, shiftv = 1, 1
+binwidth=1
+title = ''
+#title += '; Min(R/z)={} and Max(R/z)={})'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
+
+#########################################################################
 ################### DATA ANALYSIS #######################################
 #########################################################################
 enrescuts = [-0.3]
+df_plots = {}
 assert(len(enrescuts)==len(fes))
 for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
     df = algos_dfs[fe]
     #df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
     df = df[ df['cl3d_eta']>0 ]
-
     df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
 
     nansel = pd.isna(df['enres']) 
@@ -140,73 +162,60 @@ for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
     rzBinEdges = np.linspace( split[vnames.RoverZ].min(), split[vnames.RoverZ].max(), num=NBINSRZ )
     rzBinCenters = ['{:.2f}'.format(x) for x in ( rzBinEdges[1:] + rzBinEdges[:-1] ) / 2 ]
 
-    split[vnames.RoverZ] = pd.cut( np.sqrt(split.tc_x*split.tc_x + split.tc_y*split.tc_y) / abs(split.tc_z),
-                                   bins=rzBinEdges,
-                                   labels=False )
+    split = split.reset_index()
+    split[vnames.RoverZ] = pd.cut( split[vnames.RoverZ], bins=rzBinEdges, labels=False )
     split[vnames.phi] = pd.cut( split[vnames.phi], bins=NBINSPHI, labels=False )
 
-    group = split.groupby([vnames.RoverZ, vnames.phi], as_index=False).count()
-    group = group.rename(columns={'tc_z': vnames.nhits})
-    group = group[[vnames.phi, vnames.nhits, vnames.RoverZ]]
-
-#########################################################################
-################### PLOTTING ############################################
-#########################################################################
-events = group['event'].unique()
-print(events)
-quit()
-
-
-
-source = ColumnDataSource(group)
-
-mypalette = _palette(40)
-if FLAGS.log:
-    mapper = LogColorMapper(palette=mypalette, low=group[vnames.nhits].min(), high=group[vnames.nhits].max())
-else:
-    mapper = LinearColorMapper(palette=mypalette, low=group[vnames.nhits].min(), high=group[vnames.nhits].max())
+    df_plots[fe] = split
     
-shifth, shiftv = 1, 1
-title = ''
-#title += '; Min(R/z)={} and Max(R/z)={})'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
-p = figure(width=1800, height=800, title=title,
-           x_range=Range1d(group[vnames.phi].min()-shifth,
-                           group[vnames.phi].max()+shifth),
-           y_range=Range1d(group[vnames.RoverZ].min()-shiftv, group[vnames.RoverZ].max()+shiftv),
-           tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
-           x_axis_type='linear', y_axis_type='linear',
-           )
-binwidth=1
-p.rect( x=vnames.phi, y=vnames.RoverZ,
-        source=source,
-        width=binwidth, height=binwidth,
-        width_units='data', height_units='data',
-        line_color='black', fill_color=transform(vnames.nhits, mapper)
-       )
+#########################################################################
+################### GROUPING AND PLOTTING ###############################
+#########################################################################
+tabs = []
+for i,dfp in enumerate(df_plots.values()):
+    for ev in dfp['event'].unique():
+        df_tmp = dfp[ dfp.event == ev ]
+        print(df_tmp.columns)
+        quit()
 
-color_bar = ColorBar(color_mapper=mapper,
-                     ticker= ( LogTicker(desired_num_ticks=len(mypalette))
-                               if FLAGS.log else BasicTicker(desired_num_ticks=int(len(mypalette)/4)) ),
-                     formatter=PrintfTickFormatter(format="%d")
-                     )
-p.add_layout(color_bar, 'right')
+        #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
+        group = df_tmp.groupby([vnames.RoverZ, vnames.phi], as_index=False).count()
+        group = group.rename(columns={'tc_z': vnames.nhits})
+        group = group[[vnames.phi, vnames.nhits, vnames.RoverZ]]
 
-p.axis.axis_line_color = 'black'
-p.axis.major_tick_line_color = 'black'
-p.axis.major_label_text_font_size = '10px'
-p.axis.major_label_standoff = 2
-#p.xaxis.major_label_orientation = 1.0
-p.xaxis.axis_label = r"$$\color{black} \phi$$"
-p.yaxis.axis_label = '$$R/z$$'
-p.yaxis.major_label_overrides = {dig: label for dig,label in enumerate(rzBinCenters)}
+        source = ColumnDataSource(group)
 
-p.hover.tooltips = [
-    ("#hits", "@{nhits}"),
-]
+        p = figure(width=1800, height=800, title=title,
+                   x_range=Range1d(group[vnames.phi].min()-shifth,
+                                   group[vnames.phi].max()+shifth),
+                   y_range=Range1d(group[vnames.RoverZ].min()-shiftv, group[vnames.RoverZ].max()+shiftv),
+                   tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
+                   x_axis_type='linear', y_axis_type='linear',
+                   )
 
-tab1 = Panel(child=p, title="one tab")
-tab2 = Panel(child=p, title="two tab")
+        if FLAGS.log:
+            mapper = LogColorMapper(palette=mypalette, low=group[vnames.nhits].min(), high=group[vnames.nhits].max())
+        else:
+            mapper = LinearColorMapper(palette=mypalette, low=group[vnames.nhits].min(), high=group[vnames.nhits].max())
+
+        color_bar = ColorBar(color_mapper=mapper,
+                             ticker= ( LogTicker(desired_num_ticks=len(mypalette))
+                                       if FLAGS.log else BasicTicker(desired_num_ticks=int(len(mypalette)/4)) ),
+                             formatter=PrintfTickFormatter(format="%d")
+                             )
+        p.add_layout(color_bar, 'right')
+
+        p.rect( x=vnames.phi, y=vnames.RoverZ,
+                source=source,
+                width=binwidth, height=binwidth,
+                width_units='data', height_units='data',
+                line_color='black', fill_color=transform(vnames.nhits, mapper)
+               )
+
+        set_figure_props(p, rzBinCenters)
+        
+        tabs.append( Panel(child=p, title='Event {}'.format(ev)) )
 
 
 if not FLAGS.debug:
-    show( Tabs(tabs=[tab1, tab2]) )
+    show( Tabs(tabs=tabs) )

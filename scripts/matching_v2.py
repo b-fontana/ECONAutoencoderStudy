@@ -39,7 +39,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    branches_tc = [ 'event', 'tc_layer', 'tc_x', 'tc_y', 'tc_z' ]
+    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_layer', 'tc_x', 'tc_y', 'tc_z' ]
 
     batches_gen, batches_tc = ([] for _ in range(2))
     memsize_gen, memsize_tc = '128 MB', '32 MB'
@@ -59,13 +59,16 @@ def create_dataframes(files, algo_trees, gen_tree, p):
 
             for batch in data.iterate(branches_tc, step_size=memsize_tc,
                                       library='pd'):
-                batch.set_index('event', inplace=True)
+                batch = batch[ batch['tc_zside']==1 ] #positive endcap
+                batch = batch.drop(columns=['tc_zside'])
+                #convert all the trigger cell hits in each event to a list
+                batch = batch.groupby(by=['event']).aggregate(lambda x: list(x))
                 batches_tc.append(batch)
                 print('Step {}: +{} trigger cells data processed.'.format(ib,memsize_tc))
 
     df_gen = pd.concat(batches_gen)
     df_tc = pd.concat(batches_tc)
-
+    
     """ This concatenation looks like:
        genpart_exphi  genpart_exeta  genpart_energy  tc_layer       tc_x        tc_y        tc_z
 event                                                                                           
@@ -162,7 +165,7 @@ def preprocessing(param):
 
         #keep matched clusters only
         if bestmatch_only:
-            sel=algo_pos_merged['best_match']==True
+            sel=algo_pos_merged['besst_match']==True
             algo_pos_merged=algo_pos_merged[sel]
 
             #sel=algo_neg_merged['best_match']==True
@@ -175,11 +178,11 @@ def preprocessing(param):
         #algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
         algo_clean[algo_name]=algo_pos_merged.sort_values('event')
 
-        algo_clean[algo_name] = algo_clean[algo_name].join(tc, how='left', rsuffix='_algo')
+        algo_clean[algo_name] = algo_clean[algo_name].join(tc, how='left', rsuffix='_tc')
         print(algo_name, algo_clean[algo_name].shape[0])
 
     #save files to savedir in HDF
-    store = pd.HDFStore(output_file_name, mode='w')
+    store = pd.HDFStore( os.path.join('data', output_file_name), mode='w')
     for algo_name, df in algo_clean.items():
         store[algo_name] = df
     store.close()

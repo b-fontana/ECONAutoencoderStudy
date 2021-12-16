@@ -39,7 +39,8 @@ def create_dataframes(files, algo_trees, gen_tree, p):
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_layer', 'tc_x', 'tc_y', 'tc_z' ]
+    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_layer',
+                    'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta' ]
 
     batches_gen, batches_tc = ([] for _ in range(2))
     memsize_gen, memsize_tc = '128 MB', '32 MB'
@@ -165,7 +166,7 @@ def preprocessing(param):
 
         #keep matched clusters only
         if bestmatch_only:
-            sel=algo_pos_merged['besst_match']==True
+            sel=algo_pos_merged['best_match']==True
             algo_pos_merged=algo_pos_merged[sel]
 
             #sel=algo_neg_merged['best_match']==True

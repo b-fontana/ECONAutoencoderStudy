@@ -175,8 +175,6 @@ tabs = []
 for i,dfp in enumerate(df_plots.values()):
     for ev in dfp['event'].unique():
         df_tmp = dfp[ dfp.event == ev ]
-        print(df_tmp.columns)
-        quit()
 
         #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
         group = df_tmp.groupby([vnames.RoverZ, vnames.phi], as_index=False).count()

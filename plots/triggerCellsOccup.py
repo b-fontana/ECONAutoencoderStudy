@@ -194,6 +194,8 @@ if FLAGS.mode == 'sim':
         #df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
         df = df[ df['cl3d_eta']>0 ]
         df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
+        print(df)
+        quit()
 
         nansel = pd.isna(df['enres']) 
         nandf = df[nansel]
@@ -219,7 +221,7 @@ if FLAGS.mode == 'sim':
             splittedClusters[v] = splittedClusters[v].astype(np.float64)
 
         splittedClusters[simNames.RoverZ] = np.sqrt(splittedClusters.tc_x*splittedClusters.tc_x + splittedClusters.tc_y*splittedClusters.tc_y)  / abs(splittedClusters.tc_z)
-        splittedClusters = splittedClusters[ (splittedClusters[simNames.RoverZ] < FLAGS.maxROverZ) &(splittedClusters[simNames.RoverZ] > FLAGS.minROverZ) ]
+        splittedClusters = splittedClusters[ (splittedClusters[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters[simNames.RoverZ] > FLAGS.minROverZ) ]
         splittedClusters = splittedClusters.reset_index()
         splittedClusters[simNames.RoverZ] = pd.cut( splittedClusters[simNames.RoverZ], bins=rzBinEdges, labels=False )
         splittedClusters[simNames.phi] = pd.cut( splittedClusters[simNames.phi], bins=phiBinEdges, labels=False )

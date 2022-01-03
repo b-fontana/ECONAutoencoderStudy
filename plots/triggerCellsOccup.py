@@ -89,10 +89,10 @@ fes = ['Threshold']
 for fe in fes:
     simAlgoFiles[fe] = [ os.path.join(simDataPath) ]
 
-title = r'Mode: {} ({} vs {} bins)'.format(FLAGS.mode, NBINSPHI, NBINSRZ)
+title_common = r'Mode: {} ({} vs {} bins)'.format(FLAGS.mode, NBINSPHI, NBINSRZ)
 if FLAGS.pos_endcap:
-    title += '; Positive end-cap only'
-title += '; Min(R/z)={} and Max(R/z)={}'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
+    title_common += '; Positive end-cap only'
+title_common += '; Min(R/z)={} and Max(R/z)={}'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
 
 mypalette = _palette(40)
 #########################################################################
@@ -239,7 +239,7 @@ if FLAGS.mode == 'tc':
             mapper = LinearColorMapper(palette=mypalette,
                                        low=groups[isel][tcNames.nhits].min(), high=groups[isel][tcNames.nhits].max())
 
-        title += '; {}'.format(selk)
+        title = title_common + '; {}'.format(selk)
         p = figure(width=1800, height=800, title=title,
                    x_range=Range1d(tcData[tcNames.phi].min()-SHIFTH, tcData[tcNames.phi].max()+SHIFTH),
                    y_range=Range1d(tcData[tcNames.RoverZ].min()-SHIFTV, tcData[tcNames.RoverZ].max().max()+SHIFTV),
@@ -290,8 +290,7 @@ if FLAGS.mode == 'sim':
 
             source = ColumnDataSource(group)
 
-            title += '; Algo: {}'.format(_k)
-            title = ''
+            title = title_common + '; Algo: {}'.format(_k)
             p = figure(width=1800, height=800, title=title,
                        x_range=Range1d(df_plot[simNames.phi].min()-SHIFTH, df_plot[simNames.phi].max()+SHIFTH),
                        y_range=Range1d(df_plot[simNames.RoverZ].min()-SHIFTV, df_plot[simNames.RoverZ].max()+SHIFTV),

@@ -6,6 +6,7 @@ import uproot as up
 
 import bokehplot as bkp
 from bokeh.io import output_file, show
+from bokeh.layouts import gridplot
 from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource,
                           LogColorMapper, LogTicker,
                           LinearColorMapper, BasicTicker,
@@ -18,6 +19,37 @@ from bokeh.transform import transform
 from bokeh.palettes import viridis as _palette
 
 
+def calculateRoverZfromEta(eta):
+    """R/z = arctan(theta) [theta is obtained from pseudo-rapidity, eta]"""
+    _theta = 2*np.arctan( np.exp(-1 * eta) )
+    return np.arctan( _theta )
+
+def convertToBinIndex(val, binedges):
+    """
+    Converts any value into a "bin index". It is based on bin edges coming from a binned
+    distribution of the same value. This "index" is a decimal number.
+    Example: 
+        data = [1,2,3,4] is binned with binedges=[1,3,5] 
+        (two bins with bin indexes = [0,1])
+        ...
+        convertToBinIndex(0, binedges) throws AssertionError
+        convertToBinIndex(1, binedges)=0.0
+        convertToBinIndex(2, binedges)=0.5
+        convertToBinIndex(3, binedges)=1.0
+        convertToBinIndex(4, binedges)=1.5
+        convertToBinIndex(5, binedges) throws AssertionError
+        ...
+    Useful when plotting a continuous variable over a binned distribution.
+    We assume the first bin index to be zero (like in pandas.cut).
+    """
+    assert( val >= binedges[0] and val <= binedges[-1] )
+    fraction = (val-binedges[0]) / (binedges[-1]-binedges[0]) #]0;1[
+
+    minbinedge = 0. #from pandas.cut() with labels=False
+    maxbinedge = float(len(binedges)-1) #shift one unit because the indexes start from zero
+    conv_val = minbinedge + (maxbinedge-minbinedge)*fraction #float
+    return conv_val
+
 class dotDict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
@@ -25,6 +57,7 @@ class dotDict(dict):
     __delattr__ = dict.__delitem__
 
 def set_figure_props(p, xbincenters, ybincenters):
+    """set figure properties"""
     p.axis.axis_line_color = 'black'
     p.axis.major_tick_line_color = 'black'
     p.axis.major_label_text_font_size = '10px'
@@ -37,6 +70,8 @@ def set_figure_props(p, xbincenters, ybincenters):
     
     p.hover.tooltips = [
         ("#hits", "@{nhits}"),
+        ("min(eta)", "@{min_eta}"),
+        ("max(eta)", "@{max_eta}"),
     ]
 
 parser = argparse.ArgumentParser(description='Plot trigger cells occupancy.')
@@ -128,9 +163,18 @@ tcSelSections = { 'layer < 5': tcData.layer < 5,
 ################### INPUTS: SIMULATION 0 PU PHOTONS #####################
 #########################################################################
 simNames = dotDict( dict( RoverZ = 'Rz',
-                          phi = 'tc_phi',
-                          eta = 'tc_eta',
+                          etatc = 'tc_eta',
+                          phitc = 'tc_phi',
+                          entc  = 'tc_energy',
                           nhits = 'nhits',
+                          eta3d = 'cl3d_eta',
+                          phi3d = 'cl3d_phi',
+                          etagen = 'genpart_exeta',
+                          phigen = 'genpart_exphi',
+
+                          min_eta = 'min_eta',
+                          max_eta = 'max_eta',
+                          sum_en =  'sum_en',
                          ) )
 
 for fe,files in simAlgoFiles.items():
@@ -140,6 +184,7 @@ for fe,files in simAlgoFiles.items():
         with pd.HDFStore(file, mode='r') as store:
             dfs.append(store[name])
     simAlgoDFs[fe] = pd.concat(dfs)
+
 simAlgoNames = sorted(simAlgoDFs.keys())
 if FLAGS.debug:
     print('Input HDF5 keys:')
@@ -187,16 +232,24 @@ if FLAGS.mode == 'tc':
 ################### DATA ANALYSIS: SIMULATION ###########################
 #########################################################################
 if FLAGS.mode == 'sim':
-    enrescuts = [-0.3]
+    grid = []
+    enrescuts = [-0.35]
     assert(len(enrescuts)==len(fes))
     for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
         df = simAlgoDFs[fe]
-        #df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
-        df = df[ df['cl3d_eta']>0 ]
+        df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
+        df = df[ df[simNames.eta3d]>0 ]
         df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
-        print(df)
-        quit()
 
+        #### Energy resolution histogram ######################################################################
+        hist, edges = np.histogram(df['enres'], density=True, bins=300)
+        p = figure(width=1800, height=800, title='Energy Resolution: ' + fe)
+        p.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
+               fill_color="navy", line_color="white", alpha=0.7)
+        p.line(x=[cut,cut], y=[0,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
+        grid.append(p)
+        ######################################################################################################
+        
         nansel = pd.isna(df['enres']) 
         nandf = df[nansel]
         nandf['enres'] = 1.1
@@ -224,8 +277,13 @@ if FLAGS.mode == 'sim':
         splittedClusters = splittedClusters[ (splittedClusters[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters[simNames.RoverZ] > FLAGS.minROverZ) ]
         splittedClusters = splittedClusters.reset_index()
         splittedClusters[simNames.RoverZ] = pd.cut( splittedClusters[simNames.RoverZ], bins=rzBinEdges, labels=False )
-        splittedClusters[simNames.phi] = pd.cut( splittedClusters[simNames.phi], bins=phiBinEdges, labels=False )
+        splittedClusters[simNames.phitc] = pd.cut( splittedClusters[simNames.phitc], bins=phiBinEdges, labels=False )
         simAlgoPlots[fe] = splittedClusters
+
+    if not FLAGS.debug:
+        output_file('energyResolution.html')
+        _ncols = 1 if len(grid)==1 else 2
+        show( gridplot(grid, ncols=_ncols) )
 
 #########################################################################
 ################### PLOTTING: TRIGGER CELLS #############################
@@ -284,18 +342,45 @@ if FLAGS.mode == 'sim':
     for i,(_k,df_plot) in enumerate(simAlgoPlots.items()):
         for ev in df_plot['event'].unique():
             df_event = df_plot[ df_plot.event == ev ]
+            _simCols = [simNames.entc, 'tc_z', simNames.phitc, simNames.RoverZ, simNames.eta3d, simNames.phi3d,
+                        simNames.etagen, simNames.phigen, simNames.etatc, simNames.phi_tc]
+            df_event = df_event.filter(items=_simCols)     
+            df_event['cl3d_Roverz'] = calculateRoverZfromEta(df_event[simNames.eta3d])
+            df_event['gen_Roverz']  = calculateRoverZfromEta(df_event[simNames.etagen])
+
+            _cl3d_pos_rz, _cl3d_pos_phi = df_event['cl3d_Roverz'].unique(), df_event[simNames.phi3d].unique()
+            assert( len(_cl3d_pos_rz) == 1 and len(_cl3d_pos_phi) == 1 )
+            cl3d_pos_rz = convertToBinIndex(_cl3d_pos_rz[0], rzBinEdges)
+            cl3d_pos_phi = convertToBinIndex(_cl3d_pos_phi[0], phiBinEdges)
+
+            _gen_pos_rz, _gen_pos_phi = df_event['gen_Roverz'].unique(), df_event[simNames.phigen].unique()
+            assert( len(_gen_pos_rz) == 1 and len(_gen_pos_phi) == 1 )
+            gen_pos_rz = convertToBinIndex(_gen_pos_rz[0], rzBinEdges)
+            gen_pos_phi = convertToBinIndex(_gen_pos_phi[0], phiBinEdges)
+
+            df_event = df_event.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
 
             #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
-            group = df_event.groupby([simNames.RoverZ, simNames.phi], as_index=False).count()
-            group = group.rename(columns={'tc_z': simNames.nhits})
-            group = group[[simNames.phi, simNames.nhits, simNames.RoverZ]]
+            groupby = df_event.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
+            group = groupby.count()
+
+            energy_sum = groupby.sum()[simNames.entc]
+            eta_mins = groupby.min()[simNames.etatc]
+            eta_maxs = groupby.max()[simNames.etatc]
+
+            group = group.rename(columns={'tc_z': simNames.nhits}, errors='raise')
+            group.insert(0, simNames.min_eta, eta_mins)
+            group.insert(0, simNames.max_eta, eta_maxs)
+            group.insert(0, simNames.sum_en, energy_sum)
 
             source = ColumnDataSource(group)
 
             title = title_common + '; Algo: {}'.format(_k)
             p = figure(width=1800, height=800, title=title,
-                       x_range=Range1d(df_plot[simNames.phi].min()-SHIFTH, df_plot[simNames.phi].max()+SHIFTH),
-                       y_range=Range1d(df_plot[simNames.RoverZ].min()-SHIFTV, df_plot[simNames.RoverZ].max()+SHIFTV),
+                       # x_range=Range1d(df_plot[simNames.phitc].min()-SHIFTH, df_plot[simNames.phitc].max()+SHIFTH),
+                       # y_range=Range1d(df_plot[simNames.RoverZ].min()-SHIFTV, df_plot[simNames.RoverZ].max()+SHIFTV),
+                       x_range=Range1d(0-SHIFTH, len(phiBinEdges)+SHIFTH),
+                       y_range=Range1d(0-SHIFTV, len(rzBinEdges)-1+SHIFTV),
                        tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
                        x_axis_type='linear', y_axis_type='linear',
                        )
@@ -314,12 +399,19 @@ if FLAGS.mode == 'sim':
                                  )
             p.add_layout(color_bar, 'right')
 
-            p.rect( x=simNames.phi, y=simNames.RoverZ,
+            p.rect( x=simNames.phitc, y=simNames.RoverZ,
                     source=source,
                     width=BINWIDTH, height=BINWIDTH,
-                    width_units='data', height_units='data',
-                    line_color='black', fill_color=transform(simNames.nhits, mapper)
+                    width_units='data', height_units='data', line_color='black',
+                    #fill_color=transform(simNames.nhits, mapper)
+                    fill_color=transform(simNames.sum_en, mapper)
                    )
+
+            cross_options = dict(size=40, angle=3.14159/4, line_width=8)
+            p.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange',
+                    legend_label='Generated particle position', **cross_options)
+            p.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red',
+                    legend_label='3D cluster position', **cross_options)
 
             set_figure_props(p, phiBinCenters, rzBinCenters)
             tabs.append( Panel(child=p, title='Event {}'.format(ev)) )

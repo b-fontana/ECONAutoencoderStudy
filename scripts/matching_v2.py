@@ -10,13 +10,6 @@ from datetime import date
 import optparse
 from itertools import chain
 
-# pd.set_option('display.max_rows', None)
-# pd.set_option('display.max_columns', None)
-# pd.set_option('display.width', None)
-# pd.set_option('display.max_colwidth', None)
-# remove annoying warning polluting logs
-pd.options.mode.chained_assignment = None  # default='warn'
-
 workdir=os.getcwd()
 
 def deltar(df):
@@ -35,31 +28,35 @@ def matching(event):
         return (cond_a&cond_b)
 
 def create_dataframes(files, algo_trees, gen_tree, p):
-    algos = {}
+    print('Input files: {}'.format(files))
+
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_layer',
+    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_mipPt', #'tc_layer',
                     'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta' ]
 
     batches_gen, batches_tc = ([] for _ in range(2))
-    memsize_gen, memsize_tc = '128 MB', '32 MB'
+    memsize_gen, memsize_tc = '128 MB', '64 MB'
     for filename in files:
         with uproot.open(filename + ':' + gen_tree) as data:
             #print( data.num_entries_for(memsize, expressions=branches_tc) )
             for ib,batch in enumerate(data.iterate(branches_gen, step_size=memsize_gen,
                                                    library='pd')):
+
                 batch = batch[ batch['genpart_reachedEE']==p.reachedEE ]
                 batch = batch[ batch['genpart_gen']!=-1 ]
                 batch = batch[ batch['genpart_pid']==22 ]
                 batch = batch.drop(columns=['genpart_reachedEE', 'genpart_gen', 'genpart_pid'])
                 batch = batch[ batch['genpart_exeta']>0  ] #positive endcap only
                 batch.set_index('event', inplace=True)
+
                 batches_gen.append(batch)
                 print('Step {}: +{} generated data processed.'.format(ib,memsize_gen))
 
-            for batch in data.iterate(branches_tc, step_size=memsize_tc,
-                                      library='pd'):
+            for ib,batch in enumerate(data.iterate(branches_tc, step_size=memsize_tc,
+                                                   library='pd')):
+
                 batch = batch[ batch['tc_zside']==1 ] #positive endcap
                 batch = batch.drop(columns=['tc_zside'])
                 #convert all the trigger cell hits in each event to a list
@@ -81,19 +78,14 @@ event
 6
 (...)
     """
-    
-    for algo_name, algo_tree in algo_trees.items():
-        if not algo_name in algos:
-            algos[algo_name] = []
-        tree = uproot.open(filename)[algo_tree]
-        df_cl = tree.arrays(branches_cl3d, library='pd')
-        # Trick to read layers pTs, which is a vector of vector
-        df_cl['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
-        algos[algo_name].append(df_cl)
-        
+
     df_algos = {}
-    for algo_name, dfs in algos.items():
-        df_algos[algo_name] = pd.concat(dfs)
+    for algo_name, algo_tree in algo_trees.items():
+        with uproot.open(filename)[algo_tree] as tree:
+            df_algos[algo_name] = tree.arrays(branches_cl3d, library='pd')
+            # Trick to read layers pTs, which is a vector of vector
+            df_algos[algo_name]['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
+
     return(df_gen, df_algos, df_tc )
 
 def preprocessing(param):
@@ -103,7 +95,7 @@ def preprocessing(param):
     algo_trees       = param.algo_trees
     output_file_name = param.output_file_name
     bestmatch_only   = param.bestmatch_only
-    reachedEE        = param.reachedEE
+    sreachedEE        = param.reachedEE
 
     gen, algo, tc = create_dataframes(files, algo_trees, gen_tree, param)
 
@@ -117,38 +109,21 @@ def preprocessing(param):
     for algo_name,df_algo in algo.items():
         # split clusters in two, one collection for each endcap
         algo_pos = df_algo[ df_algo['cl3d_eta']>0  ]
+        
         #algo_neg = df_algo[ df_algo['cl3d_eta']<=0 ]
 
         #set the indices
         algo_pos.set_index('event', inplace=True)
         #algo_neg.set_index('event', inplace=True)
 
-        #merging gen columns and cluster columns
-        algo_pos_merged=gen.join(algo_pos, how='left', rsuffix='_algo')
+        #merging gen columns and cluster columns, keeping cluster duplicates (same event)
+        algo_pos_merged=gen.join(algo_pos, how='right', rsuffix='_algo').dropna()
+
         #algo_neg_merged=gen_neg.join(algo_neg, how='left', rsuffix='_algo')
 
         # compute deltar
         algo_pos_merged['deltar']=deltar(algo_pos_merged)
         #algo_neg_merged['deltar']=deltar(algo_neg_merged)
-
-        #keep track of the unmatched values (NaN) (ie: gen part here, but no cl3d)
-        sel=pd.isna(algo_pos_merged['deltar']) 
-        unmatched_pos=algo_pos_merged[sel]
-        algo_pos_merged=algo_pos_merged[~sel]
-
-        #sel=pd.isna(algo_neg_merged['deltar'])  
-        #unmatched_neg=algo_neg_merged[sel]
-        #algo_neg_merged=algo_neg_merged[~sel]
-
-        unmatched_pos.loc[:,'matches']=False
-        #unmatched_neg.loc[:,'matches']=False
-
-        #select deltar under threshold
-        # /!\ LP: doing so, some entire events may be removed if they have a single cl3d (it should be marked 'unmatched'?)
-        #sel=algo_pos_merged['deltar']<=threshold
-        #algo_pos_merged=algo_pos_merged[sel]
-        #sel=algo_neg_merged['deltar']<=threshold
-        #algo_neg_merged=algo_neg_merged[sel]
 
         #could be better:
         algo_pos_merged['matches'] = algo_pos_merged.deltar<=threshold
@@ -172,15 +147,12 @@ def preprocessing(param):
             #sel=algo_neg_merged['best_match']==True
             #algo_neg_merged=algo_neg_merged[sel]
 
-        #remerge with NaN values
-        algo_pos_merged=pd.concat([algo_pos_merged, unmatched_pos], sort=False)
-        #algo_neg_merged=pd.concat([algo_neg_merged, unmatched_neg], sort=False)
-
         #algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
-        algo_clean[algo_name]=algo_pos_merged.sort_values('event')
-
+        algo_clean[algo_name] = algo_pos_merged.sort_values('event')
         algo_clean[algo_name] = algo_clean[algo_name].join(tc, how='left', rsuffix='_tc')
+        
         print(algo_name, algo_clean[algo_name].shape[0])
+
 
     #save files to savedir in HDF
     store = pd.HDFStore( os.path.join('data', output_file_name), mode='w')

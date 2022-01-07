@@ -1,4 +1,5 @@
 import os
+import random
 import argparse
 import numpy as np
 import pandas as pd
@@ -165,7 +166,7 @@ tcSelSections = { 'layer < 5': tcData.layer < 5,
 simNames = dotDict( dict( RoverZ = 'Rz',
                           etatc = 'tc_eta',
                           phitc = 'tc_phi',
-                          entc  = 'tc_energy',
+                          entc  = 'tc_mipPt',
                           nhits = 'nhits',
                           eta3d = 'cl3d_eta',
                           phi3d = 'cl3d_phi',
@@ -237,6 +238,12 @@ if FLAGS.mode == 'sim':
     assert(len(enrescuts)==len(fes))
     for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
         df = simAlgoDFs[fe]
+        #print(df.groupby("event").filter(lambda x: len(x) > 1))
+
+        if FLAGS.debug:
+            print('Cluster level information:')
+            print(df.filter(regex='cl3d_*.'))
+
         df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
         df = df[ df[simNames.eta3d]>0 ]
         df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
@@ -260,25 +267,37 @@ if FLAGS.mode == 'sim':
         splittedClusters = df[ df['enres'] < cut ]
 
         # random pick some events (fixing the seed for reproducibility)
-        splittedClusters = splittedClusters.sample(n=NEVENTS, replace=False, random_state=9)
+        _events_remaining = list(splittedClusters.index.unique())
+        _events_sample = random.sample(_events_remaining, NEVENTS)
+        splittedClusters = splittedClusters.loc[_events_sample]
+        #splittedClusters.sample(n=NEVENTS, replace=False, random_state=8)
 
         if FLAGS.debug:
             print('SplitClusters Dataset: event random selection')
             print(splittedClusters)
             print(splittedClusters.columns)
 
-        tc_vars = list(filter(lambda x: x.startswith('tc_'), splittedClusters.columns.to_list()))
-        splittedClusters = splittedClusters.explode( tc_vars )
-        
-        for v in tc_vars:
-            splittedClusters[v] = splittedClusters[v].astype(np.float64)
+        #splitting remaining data into cluster and tc to avoid tc data duplication
+        _cl3d_vars = [x for x in splittedClusters.columns.to_list() if 'tc_' not in x]
+        splittedClusters_3d = splittedClusters[_cl3d_vars]
+        splittedClusters_3d = splittedClusters_3d.reset_index()
+        _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
 
-        splittedClusters[simNames.RoverZ] = np.sqrt(splittedClusters.tc_x*splittedClusters.tc_x + splittedClusters.tc_y*splittedClusters.tc_y)  / abs(splittedClusters.tc_z)
-        splittedClusters = splittedClusters[ (splittedClusters[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters[simNames.RoverZ] > FLAGS.minROverZ) ]
-        splittedClusters = splittedClusters.reset_index()
-        splittedClusters[simNames.RoverZ] = pd.cut( splittedClusters[simNames.RoverZ], bins=rzBinEdges, labels=False )
-        splittedClusters[simNames.phitc] = pd.cut( splittedClusters[simNames.phitc], bins=phiBinEdges, labels=False )
-        simAlgoPlots[fe] = splittedClusters
+        #trigger cells info is repeated across clusters in the same event
+        splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
+        
+        _tc_vars = [x for x in _tc_vars if 'tc_' in x]
+        splittedClusters_tc = splittedClusters_tc.explode( _tc_vars )
+        
+        for v in _tc_vars:
+            splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
+
+        splittedClusters_tc[simNames.RoverZ] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
+        splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters_tc[simNames.RoverZ] > FLAGS.minROverZ) ]
+        splittedClusters_tc = splittedClusters_tc.reset_index()
+        splittedClusters_tc[simNames.RoverZ] = pd.cut( splittedClusters_tc[simNames.RoverZ], bins=rzBinEdges, labels=False )
+        splittedClusters_tc[simNames.phitc] = pd.cut( splittedClusters_tc[simNames.phitc], bins=phiBinEdges, labels=False )
+        simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
     if not FLAGS.debug:
         output_file('energyResolution.html')
@@ -339,29 +358,31 @@ if FLAGS.mode == 'tc':
 if FLAGS.mode == 'sim':
     tabs = []
 
-    for i,(_k,df_plot) in enumerate(simAlgoPlots.items()):
-        for ev in df_plot['event'].unique():
-            df_event = df_plot[ df_plot.event == ev ]
-            _simCols = [simNames.entc, 'tc_z', simNames.phitc, simNames.RoverZ, simNames.eta3d, simNames.phi3d,
-                        simNames.etagen, simNames.phigen, simNames.etatc, simNames.phi_tc]
-            df_event = df_event.filter(items=_simCols)     
-            df_event['cl3d_Roverz'] = calculateRoverZfromEta(df_event[simNames.eta3d])
-            df_event['gen_Roverz']  = calculateRoverZfromEta(df_event[simNames.etagen])
+    for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
+        for ev in df_tc['event'].unique():
+            ev_tc = df_tc[ df_tc.event == ev ]
+            ev_3d = df_3d[ df_3d.event == ev ]
+            _simCols_tc = [simNames.entc, 'tc_z', simNames.phitc, simNames.RoverZ,
+                           simNames.etagen, simNames.phigen, simNames.etatc, simNames.phi_tc]
+            ev_tc = ev_tc.filter(items=_simCols_tc)
+            ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d[simNames.eta3d])
+            ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d[simNames.etagen])
 
-            _cl3d_pos_rz, _cl3d_pos_phi = df_event['cl3d_Roverz'].unique(), df_event[simNames.phi3d].unique()
-            assert( len(_cl3d_pos_rz) == 1 and len(_cl3d_pos_phi) == 1 )
-            cl3d_pos_rz = convertToBinIndex(_cl3d_pos_rz[0], rzBinEdges)
-            cl3d_pos_phi = convertToBinIndex(_cl3d_pos_phi[0], phiBinEdges)
+            _cl3d_pos_rz, _cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
+            if len(_cl3d_pos_rz) == 1 or len(_cl3d_pos_phi) == 1:  #we should have at least two clusters
+                print('WARNING: Only one cluster (event={}, phi={}, eta={})'.format(ev, _cl3d_pos_phi, _cl3d_pos_phi))
+            cl3d_pos_rz = [ convertToBinIndex(x, rzBinEdges) for x in _cl3d_pos_rz ]
+            cl3d_pos_phi = [ convertToBinIndex(x, phiBinEdges) for x in _cl3d_pos_phi ]
 
-            _gen_pos_rz, _gen_pos_phi = df_event['gen_Roverz'].unique(), df_event[simNames.phigen].unique()
+            _gen_pos_rz, _gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
             assert( len(_gen_pos_rz) == 1 and len(_gen_pos_phi) == 1 )
             gen_pos_rz = convertToBinIndex(_gen_pos_rz[0], rzBinEdges)
             gen_pos_phi = convertToBinIndex(_gen_pos_phi[0], phiBinEdges)
 
-            df_event = df_event.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
+            ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
 
             #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
-            groupby = df_event.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
+            groupby = ev_tc.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
             group = groupby.count()
 
             energy_sum = groupby.sum()[simNames.entc]
@@ -377,8 +398,6 @@ if FLAGS.mode == 'sim':
 
             title = title_common + '; Algo: {}'.format(_k)
             p = figure(width=1800, height=800, title=title,
-                       # x_range=Range1d(df_plot[simNames.phitc].min()-SHIFTH, df_plot[simNames.phitc].max()+SHIFTH),
-                       # y_range=Range1d(df_plot[simNames.RoverZ].min()-SHIFTV, df_plot[simNames.RoverZ].max()+SHIFTV),
                        x_range=Range1d(0-SHIFTH, len(phiBinEdges)+SHIFTH),
                        y_range=Range1d(0-SHIFTV, len(rzBinEdges)-1+SHIFTV),
                        tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
@@ -411,7 +430,7 @@ if FLAGS.mode == 'sim':
             p.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange',
                     legend_label='Generated particle position', **cross_options)
             p.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red',
-                    legend_label='3D cluster position', **cross_options)
+                    legend_label='3D cluster positions', **cross_options)
 
             set_figure_props(p, phiBinCenters, rzBinCenters)
             tabs.append( Panel(child=p, title='Event {}'.format(ev)) )

@@ -31,7 +31,7 @@ else:
 gen_tree = 'FloatingpointThresholdDummyHistomaxnoareath20Genclustersntuple/HGCalTriggerNtuple'
 
 # Store only information on the best match
-bestmatch_only = True
+bestmatch_only = False #best match removes duplicated clusters
 
 if local:
     output_dir = '/home/bruno/Downloads/'

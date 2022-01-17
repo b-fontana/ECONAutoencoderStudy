@@ -80,8 +80,10 @@ parser.add_argument('--nrzbins', help='number of uniform R/z bins',
                     default=42, type=int)
 parser.add_argument('--nevents', help='number of events to display',
                     default=8, type=int)
-parser.add_argument('-z', '--pos_endcap', help='Use only the positive endcap.',
+parser.add_argument('--ledges', help='layer edges', default=[0,28], nargs='+', type=int)
+parser.add_argument('--pos_endcap', help='Use only the positive endcap.',
                     default=True, type=bool)
+parser.add_argument('--hcal', help='Consider HCAL instead of default ECAL.', action='store_true')
 parser.add_argument('--minROverZ', help='Minimum value of R/z, as defined in CMSSW.',
                     default=0.076, type=float)
 parser.add_argument('--maxROverZ', help='Maximum value of R/z, as defined in CMSSW.',
@@ -92,7 +94,7 @@ parser.add_argument('-d', '--debug', help='debug mode', action='store_true')
 parser.add_argument('-l', '--log', help='use color log scale', action='store_true')
 
 FLAGS = parser.parse_args()
-
+                    
 #########################################################################
 ################### CONFIGURATION PARAMETERS ############################
 #########################################################################
@@ -201,7 +203,9 @@ if FLAGS.mode == 'tc':
         tcData = tcData.drop(['zside'], axis=1)
         tcVariables.remove('zside')
 
-    tcData = tcData[ tcData.subdet == 1 ] #only look at ECAL
+    # ignoring hgcal scintillator
+    subdetCond = tcData.subdet == 2 if FLAGS.hcal else tcData.subdet == 1
+    tcData = tcData[ subdetCond ] #only look at ECAL
     tcData = tcData.drop(['subdet'], axis=1)
     tcVariables.remove('subdet')
 
@@ -212,8 +216,7 @@ if FLAGS.mode == 'tc':
     tcData[tcNames.RoverZ] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
     tcData[tcNames.phi] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
 
-    ledges = [0,9,10,28]
-    ledgeszip = tuple(zip(ledges[:-1],ledges[1:]))
+    ledgeszip = tuple(zip(FLAGS.ledges[:-1],FLAGS.ledges[1:]))
     tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
     groups = []
     for lmin,lmax in ledgeszip:
@@ -347,7 +350,7 @@ if FLAGS.mode == 'tc':
         ]
 
         if not FLAGS.debug:
-            output_file('triggerCellsOccup_sel{}_mode{}.html'.format(idx, FLAGS.mode))
+            output_file('triggerCellsOccup_sel{}_mode{}_hcal{}.html'.format(idx, FLAGS.mode, int(FLAGS.hcal)))
             show(p)
 
 #########################################################################

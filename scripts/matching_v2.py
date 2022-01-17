@@ -155,12 +155,12 @@ def preprocessing(param):
 
 
     #save files to savedir in HDF
-    store = pd.HDFStore( os.path.join('data', output_file_name), mode='w')
+    store = pd.HDFStore( os.path.join(output_dir, 'data', output_file_name), mode='w')
     for algo_name, df in algo_clean.items():
         store[algo_name] = df
     store.close()
         
-        
+#Run with: `python scripts/matching_v2.py --cfg scripts.custom_params`
 if __name__=='__main__':
     parser = optparse.OptionParser()
     parser.add_option("--cfg",type="string", dest="params", help="select the path to the parameters file")

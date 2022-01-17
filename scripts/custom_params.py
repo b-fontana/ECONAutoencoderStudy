@@ -34,7 +34,7 @@ gen_tree = 'FloatingpointThresholdDummyHistomaxnoareath20Genclustersntuple/HGCal
 bestmatch_only = False #best match removes duplicated clusters
 
 if local:
-    output_dir = '/home/bruno/Downloads/'
+    output_dir = '.'
 else:
     output_dir = '/home/llr/cms/sauvan/DATA_UPG/HGCAL/Dataframes/study_autoencoder/3_22_1/electron_photon_signaldriven/'
     file_per_batch_electrons = 5

@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import uproot as up
 
-from bokeh.io import output_file, show
+from bokeh.io import output_file, show, save
+output_file("plots/clustersDistribution.html")
+
 from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource,
                           LogColorMapper, LogTicker,
                           LinearColorMapper, BasicTicker,
@@ -17,9 +19,9 @@ from bokeh.sampledata.unemployment1948 import data as testdata
 from bokeh.transform import transform
 from bokeh.palettes import viridis as _palette
 
-import sys
-sys.path.append( os.path.join(os.environ['HOME'], 'bokehplot') )
-import bokehplot as bkp
+# import sys
+# sys.path.append( os.path.join(os.environ['HOME'], 'bokehplot') )
+# import bokehplot as bkp
 
 import sys
 sys.path.append( os.path.join(os.environ['HOME'], 'Documents/FPGAs') )
@@ -99,8 +101,8 @@ for fe,files in algo_files.items():
     algos_dfs[fe] = pd.concat(dfs)
 algo_names = sorted(algos_dfs.keys())
 
-b = bkp.BokehPlot( os.path.join(base_path, 'plots', 'clustersDistribution.html'),
-                   nfigs=3, nframes=len(fes) )
+# b = bkp.BokehPlot( os.path.join(base_path, 'plots', 'clustersDistribution.html'),
+#                    nfigs=3, nframes=len(fes) )
 
 #########################################################################
 ################### PLOT CONFIGURATION PARAMETERS #######################
@@ -132,18 +134,18 @@ for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
     # select events with splitted clusters
     split = df[ df['enres'] < cut ]
 
-    b.histogram(idx=0, iframe=i, data=np.histogram(df['enres'], bins=500), color='orange', style='v%0.8%red',
-                fig_kwargs={'x.axis_label': r"\[ \frac{E_{Cl3d} - E_{Gen}}{E_{Gen}}\]",
-                            'y.axis_label': 'Counts'})
-    b.histogram(idx=1, iframe=i, data=np.histogram(split['enres'], bins=500), color='orange', style='v%0.8%red')
-    b.histogram(idx=2, iframe=i, data=np.histogram(split['cl3d_eta'], bins=500), color='green', style='v%0.8%red')
+    # b.histogram(idx=0, iframe=i, data=np.histogram(df['enres'], bins=500), color='orange', style='v%0.8%red',
+    #             fig_kwargs={'x.axis_label': r"\[ \frac{E_{Cl3d} - E_{Gen}}{E_{Gen}}\]",
+    #                         'y.axis_label': 'Counts'})
+    # b.histogram(idx=1, iframe=i, data=np.histogram(split['enres'], bins=500), color='orange', style='v%0.8%red')
+    # b.histogram(idx=2, iframe=i, data=np.histogram(split['cl3d_eta'], bins=500), color='green', style='v%0.8%red')
 
     # random pick some events (fixing the seed for reproducibility)
     split = split.sample(n=NEVENTS, replace=False, random_state=9)
 
     #b.graph(idx=1, data=[np.arange(1,11),np.arange(1,20,2)], style='vbar%"%2%orange', line=True)
     #b.histogram(idx=2, data=np.histogram2d(arr[:,0],arr[:,1],bins=50), style='quad%Viridis')
-    b.save_frame(show=False)
+    #b.save_frame(show=False)
 
     if FLAGS.debug:
         print('Split Dataset: event random selection')
@@ -175,8 +177,6 @@ tabs = []
 for i,dfp in enumerate(df_plots.values()):
     for ev in dfp['event'].unique():
         df_tmp = dfp[ dfp.event == ev ]
-        print(df_tmp.columns)
-        quit()
 
         #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
         group = df_tmp.groupby([vnames.RoverZ, vnames.phi], as_index=False).count()
@@ -215,7 +215,6 @@ for i,dfp in enumerate(df_plots.values()):
         set_figure_props(p, rzBinCenters)
         
         tabs.append( Panel(child=p, title='Event {}'.format(ev)) )
-
 
 if not FLAGS.debug:
     show( Tabs(tabs=tabs) )

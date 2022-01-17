@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import uproot as up
 
-import bokehplot as bkp
 from bokeh.io import output_file, show
 from bokeh.layouts import gridplot
 from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource,
@@ -18,7 +17,6 @@ from bokeh.plotting import figure
 from bokeh.sampledata.unemployment1948 import data as testdata
 from bokeh.transform import transform
 from bokeh.palettes import viridis as _palette
-
 
 def calculateRoverZfromEta(eta):
     """R/z = arctan(theta) [theta is obtained from pseudo-rapidity, eta]"""
@@ -152,14 +150,6 @@ tcData = tcTree.arrays(tcVariables, library='pd')
 if FLAGS.debug:
     print( tcData.describe() )
     
-tcSelSections = { 'layer < 5': tcData.layer < 5,
-                  'layer >= 5 and layer < 10':  (tcData.layer >= 5)  & (tcData.layer < 10),
-                  'layer = 10': tcData.layer == 10,
-                  'layer > 10 and layer < 15': (tcData.layer > 10) & (tcData.layer < 15),
-                  'layer >= 15 and layer < 20': (tcData.layer >= 15) & (tcData.layer < 20),
-                  'layer >= 20 and layer < 25': (tcData.layer >= 20) & (tcData.layer < 25),
-                  'layer >= {}'.format(tcData.layer.max()): (tcData.layer < tcData.layer.max()) }
-
 #########################################################################
 ################### INPUTS: SIMULATION 0 PU PHOTONS #####################
 #########################################################################
@@ -211,15 +201,23 @@ if FLAGS.mode == 'tc':
         tcData = tcData.drop(['zside'], axis=1)
         tcVariables.remove('zside')
 
+    tcData = tcData[ tcData.subdet == 1 ] #only look at ECAL
+    tcData = tcData.drop(['subdet'], axis=1)
+    tcVariables.remove('subdet')
+
     tcData[tcNames.RoverZ] = np.sqrt(tcData.x*tcData.x + tcData.y*tcData.y) / abs(tcData.z)
+    #the following cut removes almost no event at all
     tcData = tcData[ (tcData[tcNames.RoverZ] < FLAGS.maxROverZ) & (tcData[tcNames.RoverZ] > FLAGS.minROverZ) ]
 
     tcData[tcNames.RoverZ] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
     tcData[tcNames.phi] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
 
+    ledges = [0,9,10,28]
+    ledgeszip = tuple(zip(ledges[:-1],ledges[1:]))
+    tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
     groups = []
-    for _,v in tcSelSections.items():
-        groups.append( tcData[v] )
+    for lmin,lmax in ledgeszip:
+        groups.append( tcData[ (tcData.layer>lmin) & (tcData.layer<=lmax) ] )
         groupby = groups[-1].groupby([tcNames.RoverZ, tcNames.phi], as_index=False)
         groups[-1] = groupby.count()
         eta_mins = groupby.min()[tcNames.eta]
@@ -308,17 +306,17 @@ if FLAGS.mode == 'sim':
 ################### PLOTTING: TRIGGER CELLS #############################
 #########################################################################
 if FLAGS.mode == 'tc':
-    for isel,(selk,_) in enumerate(tcSelSections.items()):
-        source = ColumnDataSource(groups[isel])
+    for idx,grp in enumerate(groups):
+        source = ColumnDataSource(grp)
 
         if FLAGS.log:
             mapper = LogColorMapper(palette=mypalette,
-                                    low=groups[isel][tcNames.nhits].min(), high=groups[isel][tcNames.nhits].max())
+                                    low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
         else:
             mapper = LinearColorMapper(palette=mypalette,
-                                       low=groups[isel][tcNames.nhits].min(), high=groups[isel][tcNames.nhits].max())
+                                       low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
 
-        title = title_common + '; {}'.format(selk)
+        title = title_common + '; {}'.format(tcSelections[idx])
         p = figure(width=1800, height=800, title=title,
                    x_range=Range1d(tcData[tcNames.phi].min()-SHIFTH, tcData[tcNames.phi].max()+SHIFTH),
                    y_range=Range1d(tcData[tcNames.RoverZ].min()-SHIFTV, tcData[tcNames.RoverZ].max().max()+SHIFTV),
@@ -349,7 +347,7 @@ if FLAGS.mode == 'tc':
         ]
 
         if not FLAGS.debug:
-            output_file('triggerCellsOccup_sel{}_mode{}.html'.format(isel, FLAGS.mode))
+            output_file('triggerCellsOccup_sel{}_mode{}.html'.format(idx, FLAGS.mode))
             show(p)
 
 #########################################################################

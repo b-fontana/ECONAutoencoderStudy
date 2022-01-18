@@ -1,5 +1,5 @@
 import os
-import random
+import random; random.seed(18)
 import argparse
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ from bokeh.io import export_png
 
 
 from bokeh.io import output_file, show
-from bokeh.layouts import gridplot
+from bokeh.layouts import layout
 from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource,
                           LogColorMapper, LogTicker,
                           LinearColorMapper, BasicTicker,
@@ -62,8 +62,6 @@ parser.add_argument('--minROverZ', help='Minimum value of R/z, as defined in CMS
                     default=0.076, type=float)
 parser.add_argument('--maxROverZ', help='Maximum value of R/z, as defined in CMSSW.',
                     default=0.58, type=float)
-parser.add_argument('--mode', help='Trigger cells or simulation.',
-                    required=True, choices=['tc', 'sim'], default=0.58, type=str)
 parser.add_argument('-d', '--debug', help='debug mode', action='store_true')
 parser.add_argument('-l', '--log', help='use color log scale', action='store_true')
 
@@ -101,7 +99,7 @@ fes = ['Threshold']
 for fe in fes:
     simAlgoFiles[fe] = [ os.path.join(simDataPath) ]
 
-title_common = r'Mode: {} ({} vs {} bins)'.format(FLAGS.mode, NBINSPHI, NBINSRZ)
+title_common = r'{} vs {} bins'.format(NBINSPHI, NBINSRZ)
 if FLAGS.pos_endcap:
     title_common += '; Positive end-cap only'
 title_common += '; Min(R/z)={} and Max(R/z)={}'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
@@ -162,164 +160,219 @@ if FLAGS.debug:
 #########################################################################
 ################### DATA ANALYSIS: TRIGGER CELLS ########################
 #########################################################################
-if FLAGS.mode == 'tc':
-    if FLAGS.debug:
-        subdetvals  = sorted(tcData.subdet.unique())
-        layervals  = sorted(tcData.layer.unique())
-        etavals  = sorted(tcData[tcNames.eta].unique())
-        phivals  = sorted(tcData[tcNames.phi].unique())
+if FLAGS.pos_endcap:
+    tcData = tcData[ tcData.zside == 1 ] #only look at positive endcap
+    tcData = tcData.drop(['zside'], axis=1)
+    tcVariables.remove('zside')
 
-        print('Values of Trigger Subdet ({}): {}'.format(len(subdetvals), subdetvals)) #ECAL (1), HCAL silicon (2) and HCAL scintillator (10)
-        print('Values of Layers ({}): {}'.format(len(layervals), layervals))
-        print('Values of Trigger Eta ({}): {}'.format(len(etavals), etavals))
-        print('Values of Trigger Phi ({}): {}'.format(len(phivals), phivals))
+# ignoring hgcal scintillator
+subdetCond = tcData.subdet == 2 if FLAGS.hcal else tcData.subdet == 1
+tcData = tcData[ subdetCond ] #only look at ECAL
+tcData = tcData.drop(['subdet'], axis=1)
+tcVariables.remove('subdet')
 
-    if FLAGS.pos_endcap:
-        tcData = tcData[ tcData.zside == 1 ] #only look at positive endcap
-        tcData = tcData.drop(['zside'], axis=1)
-        tcVariables.remove('zside')
+tcData[tcNames.RoverZ] = np.sqrt(tcData.x*tcData.x + tcData.y*tcData.y) / abs(tcData.z)
+#the following cut removes almost no event at all
+tcData = tcData[ (tcData[tcNames.RoverZ] < FLAGS.maxROverZ) & (tcData[tcNames.RoverZ] > FLAGS.minROverZ) ]
 
-    # ignoring hgcal scintillator
-    subdetCond = tcData.subdet == 2 if FLAGS.hcal else tcData.subdet == 1
-    tcData = tcData[ subdetCond ] #only look at ECAL
-    tcData = tcData.drop(['subdet'], axis=1)
-    tcVariables.remove('subdet')
+tcData[tcNames.RoverZ + '_bin'] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
+tcData[tcNames.phi + '_bin'] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
 
-    tcData[tcNames.RoverZ] = np.sqrt(tcData.x*tcData.x + tcData.y*tcData.y) / abs(tcData.z)
-    #the following cut removes almost no event at all
-    tcData = tcData[ (tcData[tcNames.RoverZ] < FLAGS.maxROverZ) & (tcData[tcNames.RoverZ] > FLAGS.minROverZ) ]
+#convert bin ids back to values (central values in the bin)
+tcData[tcNames.RoverZ] = binConv(tcData[tcNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
+tcData[tcNames.phi] = binConv(tcData[tcNames.phi + '_bin'], binDistPhi, -np.pi)
+tcData.drop([tcNames.RoverZ + '_bin', tcNames.phi + '_bin'], axis=1)
 
-    tcData[tcNames.RoverZ + '_bin'] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
-    tcData[tcNames.phi + '_bin'] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
-
-    #convert bin ids back to values (central values in the bin)
-    tcData[tcNames.RoverZ] = binConv(tcData[tcNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
-    tcData[tcNames.phi] = binConv(tcData[tcNames.phi + '_bin'], binDistPhi, -np.pi)
-    tcData.drop([tcNames.RoverZ + '_bin', tcNames.phi + '_bin'], axis=1)
-
-    ledgeszip = tuple(zip(FLAGS.ledges[:-1],FLAGS.ledges[1:]))
-    tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
-    groups = []
-    for lmin,lmax in ledgeszip:
-        groups.append( tcData[ (tcData.layer>lmin) & (tcData.layer<=lmax) ] )
-        groupby = groups[-1].groupby([tcNames.RoverZ, tcNames.phi], as_index=False)
-        groups[-1] = groupby.count()
-        eta_mins = groupby.min()[tcNames.eta]
-        eta_maxs = groupby.max()[tcNames.eta]
-        groups[-1].insert(0, tcNames.min_eta, eta_mins)
-        groups[-1].insert(0, tcNames.max_eta, eta_maxs)
-        groups[-1] = groups[-1].rename(columns={'z': tcNames.nhits})
-        groups[-1] = groups[-1][[tcNames.phi, tcNames.nhits, tcNames.RoverZ, tcNames.min_eta, tcNames.max_eta]]
+ledgeszip = tuple(zip(FLAGS.ledges[:-1],FLAGS.ledges[1:]))
+tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
+groups = []
+for lmin,lmax in ledgeszip:
+    groups.append( tcData[ (tcData.layer>lmin) & (tcData.layer<=lmax) ] )
+    groupby = groups[-1].groupby([tcNames.RoverZ, tcNames.phi], as_index=False)
+    groups[-1] = groupby.count()
+    eta_mins = groupby.min()[tcNames.eta]
+    eta_maxs = groupby.max()[tcNames.eta]
+    groups[-1].insert(0, tcNames.min_eta, eta_mins)
+    groups[-1].insert(0, tcNames.max_eta, eta_maxs)
+    groups[-1] = groups[-1].rename(columns={'z': tcNames.nhits})
+    groups[-1] = groups[-1][[tcNames.phi, tcNames.nhits, tcNames.RoverZ, tcNames.min_eta, tcNames.max_eta]]
 
 #########################################################################
 ################### DATA ANALYSIS: SIMULATION ###########################
 #########################################################################
-if FLAGS.mode == 'sim':
-    grid = []
-    enrescuts = [-0.35]
-    assert(len(enrescuts)==len(fes))
-    for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
-        df = simAlgoDFs[fe]
-        #print(df.groupby("event").filter(lambda x: len(x) > 1))
+enresgrid = []
+enrescuts = [-0.35]
+assert(len(enrescuts)==len(fes))
+for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
+    df = simAlgoDFs[fe]
+    #print(df.groupby("event").filter(lambda x: len(x) > 1))
 
-        if FLAGS.debug:
-            print('Cluster level information:')
-            print(df.filter(regex='cl3d_*.'))
+    if FLAGS.debug:
+        print('Cluster level information:')
+        print(df.filter(regex='cl3d_*.'))
 
-        df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
-        df = df[ df[simNames.eta3d]>0 ]
-        df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
+    df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
+    df = df[ df[simNames.eta3d]>0 ]
+    df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
 
-        #### Energy resolution histogram ######################################################################
-        hist, edges = np.histogram(df['enres'], density=True, bins=300)
-        p = figure(width=1800, height=800, title='Energy Resolution: ' + fe)
-        p.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
-               fill_color="navy", line_color="white", alpha=0.7)
-        p.line(x=[cut,cut], y=[0,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
-        grid.append(p)
-        ######################################################################################################
-        
-        nansel = pd.isna(df['enres']) 
-        nandf = df[nansel]
-        nandf['enres'] = 1.1
-        df = df[~nansel]
-        df = pd.concat([df,nandf], sort=False)
+    #### Energy resolution histogram ######################################################################
+    hist, edges = np.histogram(df['enres'], density=True, bins=300)
+    p = figure(width=500, height=400, title='Energy Resolution: ' + fe)
+    p.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
+           fill_color="navy", line_color="white", alpha=0.7)
+    p.line(x=[cut,cut], y=[0,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
+    enresgrid.append(p)
+    ######################################################################################################
 
-        # select events with splitted clusters
-        splittedClusters = df[ df['enres'] < cut ]
+    nansel = pd.isna(df['enres']) 
+    nandf = df[nansel]
+    nandf['enres'] = 1.1
+    df = df[~nansel]
+    df = pd.concat([df,nandf], sort=False)
 
-        # random pick some events (fixing the seed for reproducibility)
-        _events_remaining = list(splittedClusters.index.unique())
-        _events_sample = random.sample(_events_remaining, NEVENTS)
-        splittedClusters = splittedClusters.loc[_events_sample]
-        #splittedClusters.sample(n=NEVENTS, replace=False, random_state=8)
+    # select events with splitted clusters
+    splittedClusters = df[ df['enres'] < cut ]
 
-        if FLAGS.debug:
-            print('SplitClusters Dataset: event random selection')
-            print(splittedClusters)
-            print(splittedClusters.columns)
+    # random pick some events (fixing the seed for reproducibility)
+    _events_remaining = list(splittedClusters.index.unique())
+    _events_sample = random.sample(_events_remaining, NEVENTS)
+    splittedClusters = splittedClusters.loc[_events_sample]
+    #splittedClusters.sample(n=NEVENTS, replace=False, random_state=8)
 
-        #splitting remaining data into cluster and tc to avoid tc data duplication
-        _cl3d_vars = [x for x in splittedClusters.columns.to_list() if 'tc_' not in x]
-        splittedClusters_3d = splittedClusters[_cl3d_vars]
-        splittedClusters_3d = splittedClusters_3d.reset_index()
-        _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
+    if FLAGS.debug:
+        print('SplitClusters Dataset: event random selection')
+        print(splittedClusters)
+        print(splittedClusters.columns)
 
-        #trigger cells info is repeated across clusters in the same event
-        splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
-        
-        _tc_vars = [x for x in _tc_vars if 'tc_' in x]
-        splittedClusters_tc = splittedClusters_tc.explode( _tc_vars )
-        
-        for v in _tc_vars:
-            splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
+    #splitting remaining data into cluster and tc to avoid tc data duplication
+    _cl3d_vars = [x for x in splittedClusters.columns.to_list() if 'tc_' not in x]
+    splittedClusters_3d = splittedClusters[_cl3d_vars]
+    splittedClusters_3d = splittedClusters_3d.reset_index()
+    _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
 
-        splittedClusters_tc[simNames.RoverZ] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
-        splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters_tc[simNames.RoverZ] > FLAGS.minROverZ) ]
-        splittedClusters_tc = splittedClusters_tc.reset_index()
-        splittedClusters_tc[simNames.RoverZ + '_bin'] = pd.cut( splittedClusters_tc[simNames.RoverZ], bins=rzBinEdges, labels=False )
-        splittedClusters_tc[simNames.phitc + '_bin'] = pd.cut( splittedClusters_tc[simNames.phitc], bins=phiBinEdges, labels=False )
+    #trigger cells info is repeated across clusters in the same event
+    splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
 
-        #convert bin ids back to values (central values in the bin)
-        splittedClusters_tc[simNames.RoverZ] = binConv(splittedClusters_tc[simNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
-        splittedClusters_tc[simNames.phitc] = binConv(splittedClusters_tc[simNames.phitc + '_bin'], binDistPhi, -np.pi)
-        splittedClusters_tc.drop([simNames.RoverZ + '_bin', simNames.phitc + '_bin'], axis=1)
-        
-        simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
+    _tc_vars = [x for x in _tc_vars if 'tc_' in x]
+    splittedClusters_tc = splittedClusters_tc.explode( _tc_vars )
 
-    if not FLAGS.debug:
-        output_file( os.path.join('out', 'energyResolution.html') )
-        _ncols = 1 if len(grid)==1 else 2
-        show( gridplot(grid, ncols=_ncols) )
+    for v in _tc_vars:
+        splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
+
+    splittedClusters_tc[simNames.RoverZ] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
+    splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters_tc[simNames.RoverZ] > FLAGS.minROverZ) ]
+    splittedClusters_tc = splittedClusters_tc.reset_index()
+    splittedClusters_tc[simNames.RoverZ + '_bin'] = pd.cut( splittedClusters_tc[simNames.RoverZ], bins=rzBinEdges, labels=False )
+    splittedClusters_tc[simNames.phitc + '_bin'] = pd.cut( splittedClusters_tc[simNames.phitc], bins=phiBinEdges, labels=False )
+
+    #convert bin ids back to values (central values in the bin)
+    splittedClusters_tc[simNames.RoverZ] = binConv(splittedClusters_tc[simNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
+    splittedClusters_tc[simNames.phitc] = binConv(splittedClusters_tc[simNames.phitc + '_bin'], binDistPhi, -np.pi)
+    splittedClusters_tc.drop([simNames.RoverZ + '_bin', simNames.phitc + '_bin'], axis=1)
+
+    simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
+
+if not FLAGS.debug:
+    output_file( os.path.join('out', 'energyResolution.html') )
+    _ncols = 1 if len(enresgrid)==1 else 2
+    #show( gridplot(enresgrid, ncols=_ncols) )
 
 #########################################################################
 ################### PLOTTING: TRIGGER CELLS #############################
 #########################################################################
-if FLAGS.mode == 'tc':
-    for idx,grp in enumerate(groups):
-        source = ColumnDataSource(grp)
+tc_backgrounds = []
+for idx,grp in enumerate(groups):
+    source = ColumnDataSource(grp)
 
-        if FLAGS.log:
-            mapper = LogColorMapper(palette=mypalette,
-                                    low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
-        else:
-            mapper = LinearColorMapper(palette=mypalette,
-                                       low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
+    if FLAGS.log:
+        mapper = LogColorMapper(palette=mypalette,
+                                low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
+    else:
+        mapper = LinearColorMapper(palette=mypalette,
+                                   low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
 
-        title = title_common + '; {}'.format(tcSelections[idx])
-        p = figure(width=1800, height=800, title=title,
-                   x_range=Range1d(tcData[tcNames.phi].min()-SHIFTH, tcData[tcNames.phi].max()+SHIFTH),
-                   y_range=Range1d(tcData[tcNames.RoverZ].min()-SHIFTV, tcData[tcNames.RoverZ].max().max()+SHIFTV),
-                   tools="hover,box_select,box_zoom,undo,redo,reset,save", x_axis_location='below',
+    title = title_common + '; {}'.format(tcSelections[idx])
+    p = figure(width=1800, height=500, title=title,
+               x_range=Range1d(tcData[tcNames.phi].min()-SHIFTH, tcData[tcNames.phi].max()+SHIFTH),
+               y_range=Range1d(tcData[tcNames.RoverZ].min()-SHIFTV, tcData[tcNames.RoverZ].max().max()+SHIFTV),
+               tools="hover,box_select,box_zoom,undo,redo,reset,save", x_axis_location='below',
+               x_axis_type='linear', y_axis_type='linear',
+               )
+
+    p.rect( x=tcNames.phi, y=tcNames.RoverZ,
+            source=source,
+            width=binDistPhi, height=binDistRz,
+            width_units='data', height_units='data',
+            line_color='black', fill_color=transform(tcNames.nhits, mapper)
+           )
+
+    color_bar = ColorBar(color_mapper=mapper,
+                         ticker= ( LogTicker(desired_num_ticks=len(mypalette))
+                                   if FLAGS.log else BasicTicker(desired_num_ticks=int(len(mypalette)/4)) ),
+                         formatter=PrintfTickFormatter(format="%d")
+                         )
+    p.add_layout(color_bar, 'right')
+
+    set_figure_props(p, phiBinCenters, rzBinCenters)
+
+    p.hover.tooltips = [
+        ("#hits", "@{nhits}"),
+        ("min(eta)", "@{min_eta}"),
+        ("max(eta)", "@{max_eta}"),
+    ]
+
+    tc_backgrounds.append( p )
+
+#########################################################################
+################### PLOTTING: SIMULATION ################################
+#########################################################################
+tabs, pics = ([] for _ in range(2))
+
+for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
+    for ev in df_tc['event'].unique():
+        ev_tc = df_tc[ df_tc.event == ev ]
+        ev_3d = df_3d[ df_3d.event == ev ]
+        _simCols_tc = [simNames.entc, 'tc_z', simNames.phitc, simNames.RoverZ,
+                       simNames.etagen, simNames.phigen, simNames.etatc, simNames.phi_tc]
+        ev_tc = ev_tc.filter(items=_simCols_tc)
+        ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d[simNames.eta3d])
+        ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d[simNames.etagen])
+
+        cl3d_pos_rz, cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
+        gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
+        assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
+
+        ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
+
+        #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
+        groupby = ev_tc.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
+        group = groupby.count()
+
+        energy_sum = groupby.sum()[simNames.entc]
+        eta_mins = groupby.min()[simNames.etatc]
+        eta_maxs = groupby.max()[simNames.etatc]
+
+        group = group.rename(columns={'tc_z': simNames.nhits}, errors='raise')
+        group.insert(0, simNames.min_eta, eta_mins)
+        group.insert(0, simNames.max_eta, eta_maxs)
+        group.insert(0, simNames.sum_en, energy_sum)
+
+        source = ColumnDataSource(group)
+
+        title = title_common + '; Algo: {}'.format(_k)
+        p = figure(width=1100, height=400, title=title,
+                   x_range=Range1d(phiBinEdges[0]-SHIFTH, phiBinEdges[-1]+SHIFTH),
+                   y_range=Range1d(rzBinEdges[0]-SHIFTV, rzBinEdges[-1]+SHIFTV),
+                   tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
                    x_axis_type='linear', y_axis_type='linear',
                    )
 
-        p.rect( x=tcNames.phi, y=tcNames.RoverZ,
-                source=source,
-                width=binDistPhi, height=binDistRz,
-                width_units='data', height_units='data',
-                line_color='black', fill_color=transform(tcNames.nhits, mapper)
-               )
+        if FLAGS.log:
+            mapper = LogColorMapper(palette=mypalette,
+                                    low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
+        else:
+            mapper = LinearColorMapper(palette=mypalette,
+                                       low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
 
         color_bar = ColorBar(color_mapper=mapper,
                              ticker= ( LogTicker(desired_num_ticks=len(mypalette))
@@ -328,98 +381,41 @@ if FLAGS.mode == 'tc':
                              )
         p.add_layout(color_bar, 'right')
 
+        p.rect( x=simNames.phitc, y=simNames.RoverZ,
+                source=source,
+                width=binDistPhi, height=binDistRz,
+                width_units='data', height_units='data', line_color='black',
+                #fill_color=transform(simNames.nhits, mapper)
+                fill_color=transform(simNames.sum_en, mapper)
+               )
+
+        cross_options = dict(size=25, angle=3.14159/4, line_width=8)
+        p.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange',
+                legend_label='Generated particle position', **cross_options)
+        p.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red',
+                legend_label='3D cluster positions', **cross_options)
+
         set_figure_props(p, phiBinCenters, rzBinCenters)
         
+        for bkg in tc_backgrounds:
+            bkg.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange', **cross_options)
+            bkg.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red', **cross_options)
+
         p.hover.tooltips = [
             ("#hits", "@{nhits}"),
-            ("min(eta)", "@{min_eta}"),
-            ("max(eta)", "@{max_eta}"),
         ]
+        
+        pics.append( (p,ev) )
+        tabs.append( Panel(child=p, title='Event {}'.format(ev)) )
 
-        if not FLAGS.debug:
-            output_file('triggerCellsOccup_sel{}_mode{}_hcal{}.html'.format(idx, FLAGS.mode, int(FLAGS.hcal)))
-            show(p)
+if not FLAGS.debug:
+    outname = os.path.join('out', 'triggerCellsOccup')
+    output_file(outname+'.html')
 
-#########################################################################
-################### PLOTTING: SIMULATION ################################
-#########################################################################
-if FLAGS.mode == 'sim':
-    tabs, pics = ([] for _ in range(2))
-
-    for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
-        for ev in df_tc['event'].unique():
-            ev_tc = df_tc[ df_tc.event == ev ]
-            ev_3d = df_3d[ df_3d.event == ev ]
-            _simCols_tc = [simNames.entc, 'tc_z', simNames.phitc, simNames.RoverZ,
-                           simNames.etagen, simNames.phigen, simNames.etatc, simNames.phi_tc]
-            ev_tc = ev_tc.filter(items=_simCols_tc)
-            ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d[simNames.eta3d])
-            ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d[simNames.etagen])
-
-            cl3d_pos_rz, cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
-            gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
-            assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
-            
-            ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
-
-            #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
-            groupby = ev_tc.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
-            group = groupby.count()
-
-            energy_sum = groupby.sum()[simNames.entc]
-            eta_mins = groupby.min()[simNames.etatc]
-            eta_maxs = groupby.max()[simNames.etatc]
-
-            group = group.rename(columns={'tc_z': simNames.nhits}, errors='raise')
-            group.insert(0, simNames.min_eta, eta_mins)
-            group.insert(0, simNames.max_eta, eta_maxs)
-            group.insert(0, simNames.sum_en, energy_sum)
-
-            source = ColumnDataSource(group)
-
-            title = title_common + '; Algo: {}'.format(_k)
-            p = figure(width=1800, height=800, title=title,
-                       x_range=Range1d(phiBinEdges[0]-SHIFTH, phiBinEdges[-1]+SHIFTH),
-                       y_range=Range1d(rzBinEdges[0]-SHIFTV, rzBinEdges[-1]+SHIFTV),
-                       tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
-                       x_axis_type='linear', y_axis_type='linear',
-                       )
-
-            if FLAGS.log:
-                mapper = LogColorMapper(palette=mypalette,
-                                        low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
-            else:
-                mapper = LinearColorMapper(palette=mypalette,
-                                           low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
-
-            color_bar = ColorBar(color_mapper=mapper,
-                                 ticker= ( LogTicker(desired_num_ticks=len(mypalette))
-                                           if FLAGS.log else BasicTicker(desired_num_ticks=int(len(mypalette)/4)) ),
-                                 formatter=PrintfTickFormatter(format="%d")
-                                 )
-            p.add_layout(color_bar, 'right')
-
-            p.rect( x=simNames.phitc, y=simNames.RoverZ,
-                    source=source,
-                    width=binDistPhi, height=binDistRz,
-                    width_units='data', height_units='data', line_color='black',
-                    #fill_color=transform(simNames.nhits, mapper)
-                    fill_color=transform(simNames.sum_en, mapper)
-                   )
-
-            cross_options = dict(size=40, angle=3.14159/4, line_width=8)
-            p.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange',
-                    legend_label='Generated particle position', **cross_options)
-            p.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red',
-                    legend_label='3D cluster positions', **cross_options)
-
-            set_figure_props(p, phiBinCenters, rzBinCenters)
-            pics.append( (p,ev) )
-            tabs.append( Panel(child=p, title='Event {}'.format(ev)) )
-
-    if not FLAGS.debug:
-        outname = os.path.join('out', 'triggerCellsOccup_mode{}'.format(FLAGS.mode))
-        output_file(outname+'.html')
-        show( Tabs(tabs=tabs) )
-        for pic,ev in pics:
-            export_png(pic, filename=outname+'_event{}.png'.format(ev))
+    tc_panels = []
+    for i,bkg in enumerate(tc_backgrounds):
+        tc_panels.append( Panel(child=bkg, title='Selection {}'.format(i)) )
+        
+    show( layout([[enresgrid[0], Tabs(tabs=tabs)], [Tabs(tabs=tc_panels)]]) )
+    # for pic,ev in pics:
+    #     export_png(pic, filename=outname+'_event{}.png'.format(ev))

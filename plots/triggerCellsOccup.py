@@ -4,6 +4,9 @@ import argparse
 import numpy as np
 import pandas as pd
 import uproot as up
+from bokeh.io import export_png
+
+
 
 from bokeh.io import output_file, show
 from bokeh.layouts import gridplot
@@ -23,32 +26,6 @@ def calculateRoverZfromEta(eta):
     _theta = 2*np.arctan( np.exp(-1 * eta) )
     return np.arctan( _theta )
 
-def convertToBinIndex(val, binedges):
-    """
-    Converts any value into a "bin index". It is based on bin edges coming from a binned
-    distribution of the same value. This "index" is a decimal number.
-    Example: 
-        data = [1,2,3,4] is binned with binedges=[1,3,5] 
-        (two bins with bin indexes = [0,1])
-        ...
-        convertToBinIndex(0, binedges) throws AssertionError
-        convertToBinIndex(1, binedges)=0.0
-        convertToBinIndex(2, binedges)=0.5
-        convertToBinIndex(3, binedges)=1.0
-        convertToBinIndex(4, binedges)=1.5
-        convertToBinIndex(5, binedges) throws AssertionError
-        ...
-    Useful when plotting a continuous variable over a binned distribution.
-    We assume the first bin index to be zero (like in pandas.cut).
-    """
-    assert( val >= binedges[0] and val <= binedges[-1] )
-    fraction = (val-binedges[0]) / (binedges[-1]-binedges[0]) #]0;1[
-
-    minbinedge = 0. #from pandas.cut() with labels=False
-    maxbinedge = float(len(binedges)-1) #shift one unit because the indexes start from zero
-    conv_val = minbinedge + (maxbinedge-minbinedge)*fraction #float
-    return conv_val
-
 class dotDict(dict):
     """dot.notation access to dictionary attributes"""
     __getattr__ = dict.get
@@ -61,11 +38,8 @@ def set_figure_props(p, xbincenters, ybincenters):
     p.axis.major_tick_line_color = 'black'
     p.axis.major_label_text_font_size = '10px'
     p.axis.major_label_standoff = 2
-    #p.xaxis.major_label_orientation = 1.0
     p.xaxis.axis_label = r"$$\color{black} \phi$$"
-    p.xaxis.major_label_overrides = {dig: label for dig,label in enumerate(xbincenters)}
     p.yaxis.axis_label = '$$R/z$$'
-    p.yaxis.major_label_overrides = {dig: label for dig,label in enumerate(ybincenters)}
     
     p.hover.tooltips = [
         ("#hits", "@{nhits}"),
@@ -106,9 +80,11 @@ rzBinEdges = np.linspace( FLAGS.minROverZ, FLAGS.maxROverZ, num=NBINSRZ )
 rzBinCenters = ['{:.2f}'.format(x) for x in ( rzBinEdges[1:] + rzBinEdges[:-1] ) / 2 ]
 phiBinEdges = np.linspace( -np.pi, np.pi, num=NBINSPHI )
 phiBinCenters = ['{:.2f}'.format(x) for x in ( phiBinEdges[1:] + phiBinEdges[:-1] ) / 2 ]
+binDistRz = rzBinEdges[1] - rzBinEdges[0] #assumes the binning is regular
+binDistPhi = phiBinEdges[1] - phiBinEdges[0] #assumes the binning is regular
+binConv = lambda vals,dist,amin : (vals*dist) + (dist/2) + amin
 
-SHIFTH, SHIFTV = 1, 1
-BINWIDTH=1
+SHIFTH, SHIFTV = binDistPhi, binDistRz
 
 tcDataPath = os.path.join(os.environ['HOME'], 'Downloads', 'test_triggergeom.root')
 tcFile = up.open(tcDataPath)
@@ -213,8 +189,13 @@ if FLAGS.mode == 'tc':
     #the following cut removes almost no event at all
     tcData = tcData[ (tcData[tcNames.RoverZ] < FLAGS.maxROverZ) & (tcData[tcNames.RoverZ] > FLAGS.minROverZ) ]
 
-    tcData[tcNames.RoverZ] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
-    tcData[tcNames.phi] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
+    tcData[tcNames.RoverZ + '_bin'] = pd.cut( tcData[tcNames.RoverZ], bins=rzBinEdges, labels=False )
+    tcData[tcNames.phi + '_bin'] = pd.cut( tcData[tcNames.phi], bins=phiBinEdges, labels=False )
+
+    #convert bin ids back to values (central values in the bin)
+    tcData[tcNames.RoverZ] = binConv(tcData[tcNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
+    tcData[tcNames.phi] = binConv(tcData[tcNames.phi + '_bin'], binDistPhi, -np.pi)
+    tcData.drop([tcNames.RoverZ + '_bin', tcNames.phi + '_bin'], axis=1)
 
     ledgeszip = tuple(zip(FLAGS.ledges[:-1],FLAGS.ledges[1:]))
     tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
@@ -296,12 +277,18 @@ if FLAGS.mode == 'sim':
         splittedClusters_tc[simNames.RoverZ] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
         splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc[simNames.RoverZ] < FLAGS.maxROverZ) & (splittedClusters_tc[simNames.RoverZ] > FLAGS.minROverZ) ]
         splittedClusters_tc = splittedClusters_tc.reset_index()
-        splittedClusters_tc[simNames.RoverZ] = pd.cut( splittedClusters_tc[simNames.RoverZ], bins=rzBinEdges, labels=False )
-        splittedClusters_tc[simNames.phitc] = pd.cut( splittedClusters_tc[simNames.phitc], bins=phiBinEdges, labels=False )
+        splittedClusters_tc[simNames.RoverZ + '_bin'] = pd.cut( splittedClusters_tc[simNames.RoverZ], bins=rzBinEdges, labels=False )
+        splittedClusters_tc[simNames.phitc + '_bin'] = pd.cut( splittedClusters_tc[simNames.phitc], bins=phiBinEdges, labels=False )
+
+        #convert bin ids back to values (central values in the bin)
+        splittedClusters_tc[simNames.RoverZ] = binConv(splittedClusters_tc[simNames.RoverZ + '_bin'], binDistRz, FLAGS.minROverZ)
+        splittedClusters_tc[simNames.phitc] = binConv(splittedClusters_tc[simNames.phitc + '_bin'], binDistPhi, -np.pi)
+        splittedClusters_tc.drop([simNames.RoverZ + '_bin', simNames.phitc + '_bin'], axis=1)
+        
         simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
     if not FLAGS.debug:
-        output_file('energyResolution.html')
+        output_file( os.path.join('out', 'energyResolution.html') )
         _ncols = 1 if len(grid)==1 else 2
         show( gridplot(grid, ncols=_ncols) )
 
@@ -329,7 +316,7 @@ if FLAGS.mode == 'tc':
 
         p.rect( x=tcNames.phi, y=tcNames.RoverZ,
                 source=source,
-                width=BINWIDTH, height=BINWIDTH,
+                width=binDistPhi, height=binDistRz,
                 width_units='data', height_units='data',
                 line_color='black', fill_color=transform(tcNames.nhits, mapper)
                )
@@ -357,7 +344,7 @@ if FLAGS.mode == 'tc':
 ################### PLOTTING: SIMULATION ################################
 #########################################################################
 if FLAGS.mode == 'sim':
-    tabs = []
+    tabs, pics = ([] for _ in range(2))
 
     for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
         for ev in df_tc['event'].unique():
@@ -369,17 +356,10 @@ if FLAGS.mode == 'sim':
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d[simNames.eta3d])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d[simNames.etagen])
 
-            _cl3d_pos_rz, _cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
-            if len(_cl3d_pos_rz) == 1 or len(_cl3d_pos_phi) == 1:  #we should have at least two clusters
-                print('WARNING: Only one cluster (event={}, phi={}, eta={})'.format(ev, _cl3d_pos_phi, _cl3d_pos_phi))
-            cl3d_pos_rz = [ convertToBinIndex(x, rzBinEdges) for x in _cl3d_pos_rz ]
-            cl3d_pos_phi = [ convertToBinIndex(x, phiBinEdges) for x in _cl3d_pos_phi ]
-
-            _gen_pos_rz, _gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
-            assert( len(_gen_pos_rz) == 1 and len(_gen_pos_phi) == 1 )
-            gen_pos_rz = convertToBinIndex(_gen_pos_rz[0], rzBinEdges)
-            gen_pos_phi = convertToBinIndex(_gen_pos_phi[0], phiBinEdges)
-
+            cl3d_pos_rz, cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
+            gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
+            assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
+            
             ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
 
             #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
@@ -399,8 +379,8 @@ if FLAGS.mode == 'sim':
 
             title = title_common + '; Algo: {}'.format(_k)
             p = figure(width=1800, height=800, title=title,
-                       x_range=Range1d(0-SHIFTH, len(phiBinEdges)+SHIFTH),
-                       y_range=Range1d(0-SHIFTV, len(rzBinEdges)-1+SHIFTV),
+                       x_range=Range1d(phiBinEdges[0]-SHIFTH, phiBinEdges[-1]+SHIFTH),
+                       y_range=Range1d(rzBinEdges[0]-SHIFTV, rzBinEdges[-1]+SHIFTV),
                        tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
                        x_axis_type='linear', y_axis_type='linear',
                        )
@@ -421,7 +401,7 @@ if FLAGS.mode == 'sim':
 
             p.rect( x=simNames.phitc, y=simNames.RoverZ,
                     source=source,
-                    width=BINWIDTH, height=BINWIDTH,
+                    width=binDistPhi, height=binDistRz,
                     width_units='data', height_units='data', line_color='black',
                     #fill_color=transform(simNames.nhits, mapper)
                     fill_color=transform(simNames.sum_en, mapper)
@@ -434,8 +414,12 @@ if FLAGS.mode == 'sim':
                     legend_label='3D cluster positions', **cross_options)
 
             set_figure_props(p, phiBinCenters, rzBinCenters)
+            pics.append( (p,ev) )
             tabs.append( Panel(child=p, title='Event {}'.format(ev)) )
 
     if not FLAGS.debug:
-        output_file('triggerCellsOccup_mode{}.html'.format(FLAGS.mode))
+        outname = os.path.join('out', 'triggerCellsOccup_mode{}'.format(FLAGS.mode))
+        output_file(outname+'.html')
         show( Tabs(tabs=tabs) )
+        for pic,ev in pics:
+            export_png(pic, filename=outname+'_event{}.png'.format(ev))

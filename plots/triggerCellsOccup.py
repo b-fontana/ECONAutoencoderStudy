@@ -104,7 +104,7 @@ if FLAGS.pos_endcap:
     title_common += '; Positive end-cap only'
 title_common += '; Min(R/z)={} and Max(R/z)={}'.format(FLAGS.minROverZ, FLAGS.maxROverZ)
 
-mypalette = _palette(40)
+mypalette = _palette(50)
 #########################################################################
 ################### INPUTS: TRIGGER CELLS ###############################
 #########################################################################
@@ -216,11 +216,14 @@ for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
     df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
 
     #### Energy resolution histogram ######################################################################
-    hist, edges = np.histogram(df['enres'], density=True, bins=300)
-    p = figure(width=500, height=400, title='Energy Resolution: ' + fe)
-    p.quad(top=hist, bottom=0, left=edges[:-1], right=edges[1:],
+    hist, edges = np.histogram(df['enres'], density=True, bins=150)
+
+    p = figure( width=500, height=300, title='Energy Resolution: ' + fe,
+                y_axis_type="log")
+    virtualmin = 1e-4 #avoid log scale issues
+    p.quad(top=hist, bottom=virtualmin, left=edges[:-1], right=edges[1:],
            fill_color="navy", line_color="white", alpha=0.7)
-    p.line(x=[cut,cut], y=[0,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
+    p.line(x=[cut,cut], y=[virtualmin,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
     enresgrid.append(p)
     ######################################################################################################
 
@@ -292,7 +295,7 @@ for idx,grp in enumerate(groups):
                                    low=grp[tcNames.nhits].min(), high=grp[tcNames.nhits].max())
 
     title = title_common + '; {}'.format(tcSelections[idx])
-    p = figure(width=1800, height=500, title=title,
+    p = figure(width=1800, height=600, title=title,
                x_range=Range1d(tcData[tcNames.phi].min()-SHIFTH, tcData[tcNames.phi].max()+SHIFTH),
                y_range=Range1d(tcData[tcNames.RoverZ].min()-SHIFTV, tcData[tcNames.RoverZ].max().max()+SHIFTV),
                tools="hover,box_select,box_zoom,undo,redo,reset,save", x_axis_location='below',
@@ -360,19 +363,19 @@ for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
         source = ColumnDataSource(group)
 
         title = title_common + '; Algo: {}'.format(_k)
-        p = figure(width=1100, height=400, title=title,
+        p = figure(width=1100, height=300, title=title,
                    x_range=Range1d(phiBinEdges[0]-SHIFTH, phiBinEdges[-1]+SHIFTH),
                    y_range=Range1d(rzBinEdges[0]-SHIFTV, rzBinEdges[-1]+SHIFTV),
                    tools="hover,box_select,box_zoom,reset,save", x_axis_location='below',
                    x_axis_type='linear', y_axis_type='linear',
                    )
 
+        mapoptions = dict( low=group[simNames.sum_en].min(),
+                           high=group[simNames.sum_en].max() )
         if FLAGS.log:
-            mapper = LogColorMapper(palette=mypalette,
-                                    low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
+            mapper = LogColorMapper(palette=mypalette, **mapoptions)
         else:
-            mapper = LinearColorMapper(palette=mypalette,
-                                       low=group[simNames.nhits].min(), high=group[simNames.nhits].max())
+            mapper = LinearColorMapper(palette=mypalette, **mapoptions)
 
         color_bar = ColorBar(color_mapper=mapper,
                              ticker= ( LogTicker(desired_num_ticks=len(mypalette))
@@ -385,11 +388,10 @@ for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
                 source=source,
                 width=binDistPhi, height=binDistRz,
                 width_units='data', height_units='data', line_color='black',
-                #fill_color=transform(simNames.nhits, mapper)
                 fill_color=transform(simNames.sum_en, mapper)
                )
 
-        cross_options = dict(size=25, angle=3.14159/4, line_width=8)
+        cross_options = dict(size=25, angle=3.14159/4, line_width=4)
         p.cross(x=gen_pos_phi, y=gen_pos_rz, color='orange',
                 legend_label='Generated particle position', **cross_options)
         p.cross(x=cl3d_pos_phi, y=cl3d_pos_rz, color='red',
@@ -403,6 +405,7 @@ for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
 
         p.hover.tooltips = [
             ("#hits", "@{nhits}"),
+            ("#sum_en", "@{sum_en}"),
         ]
         
         pics.append( (p,ev) )

@@ -54,7 +54,7 @@ parser.add_argument('--nrzbins', help='number of uniform R/z bins',
                     default=42, type=int)
 parser.add_argument('--nevents', help='number of events to display',
                     default=8, type=int)
-parser.add_argument('--ledges', help='layer edges', default=[0,28], nargs='+', type=int)
+parser.add_argument('--ledges', help='layer edges (if -1 is added the full range is also included)', default=[0,28], nargs='+', type=int)
 parser.add_argument('--pos_endcap', help='Use only the positive endcap.',
                     default=True, type=bool)
 parser.add_argument('--hcal', help='Consider HCAL instead of default ECAL.', action='store_true')
@@ -183,7 +183,16 @@ tcData[tcNames.RoverZ] = binConv(tcData[tcNames.RoverZ + '_bin'], binDistRz, FLA
 tcData[tcNames.phi] = binConv(tcData[tcNames.phi + '_bin'], binDistPhi, -np.pi)
 tcData.drop([tcNames.RoverZ + '_bin', tcNames.phi + '_bin'], axis=1)
 
-ledgeszip = tuple(zip(FLAGS.ledges[:-1],FLAGS.ledges[1:]))
+# if `-1` is included in FLAGS.ledges, the full selection is also drawn
+try:
+    FLAGS.ledges.remove(-1)
+    leftLayerEdges, rightLayerEdges = FLAGS.ledges[:-1], FLAGS.ledges[1:]
+    leftLayerEdges.insert(0, 0)
+    rightLayerEdges.insert(0, tcData.layer.max())
+except ValueError:
+    leftLayerEdges, rightLayerEdges = FLAGS.ledges[:-1], FLAGS.ledges[1:]
+
+ledgeszip = tuple(zip(leftLayerEdges,rightLayerEdges))
 tcSelections = ['layer>{}, layer<={}'.format(x,y) for x,y in ledgeszip]
 groups = []
 for lmin,lmax in ledgeszip:

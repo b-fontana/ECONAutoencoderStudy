@@ -17,7 +17,6 @@ from bokeh.models import (BasicTicker, ColorBar, ColumnDataSource,
                           Range1d,
                           Panel, Tabs)
 from bokeh.plotting import figure
-from bokeh.sampledata.unemployment1948 import data as testdata
 from bokeh.transform import transform
 from bokeh.palettes import viridis as _palette
 
@@ -352,9 +351,8 @@ for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
 
         cl3d_pos_rz, cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d[simNames.phi3d].unique()
         gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d[simNames.phigen].unique()
-        assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
-
         ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
+        assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
 
         #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
         groupby = ev_tc.groupby([simNames.RoverZ, simNames.phitc], as_index=False)

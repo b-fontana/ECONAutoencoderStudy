@@ -10,9 +10,7 @@ from bokeh.io import export_png
 from bokeh.plotting import figure
 
 import configuration as conf
-from utils import calculateRoverZfromEta
-
-binConv = lambda vals,dist,amin : (vals*dist) + (dist/2) + amin
+from utils import calculateRoverZfromEta, binConv
 
 """
 Fills split clusters information according to the Stage2 FPGA fixed binning.
@@ -21,8 +19,7 @@ Fills split clusters information according to the Stage2 FPGA fixed binning.
 ### Data Extraction ####################################################
 simDataPath = os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingIn)
 simAlgoDFs, simAlgoFiles, simAlgoPlots = ({} for _ in range(3))
-fes = ['Threshold']
-for fe in fes:
+for fe in conf.FesAlgos:
     simAlgoFiles[fe] = [ os.path.join(simDataPath) ]
 
 for fe,files in simAlgoFiles.items():
@@ -40,8 +37,8 @@ if conf.Debug:
 
 ### Data Processing ######################################################
 enrescuts = [-0.35]
-assert(len(enrescuts)==len(fes))
-for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
+assert(len(enrescuts)==len(conf.FesAlgos))
+for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     df = simAlgoDFs[fe]
 
     if conf.Debug:
@@ -107,11 +104,6 @@ for i,(fe,cut) in enumerate(zip(fes,enrescuts)):
     splittedClusters_tc['Rz_bin'] = pd.cut( splittedClusters_tc.Rz, bins=conf.RzBinEdges, labels=False )
     splittedClusters_tc['tc_phi_bin'] = pd.cut( splittedClusters_tc['tc_phi'], bins=conf.PhiBinEdges, labels=False )
 
-    #convert bin ids back to values (central values in the bin)
-    splittedClusters_tc['Rz'] = binConv(splittedClusters_tc['Rz_bin'], conf.BinDistRz, conf.MinROverZ)
-    splittedClusters_tc['tc_phi'] = binConv(splittedClusters_tc['tc_phi_bin'], conf.BinDistPhi, -np.pi)
-    splittedClusters_tc.drop(['Rz_bin', 'tc_phi_bin'], axis=1)
-
     simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
 ### Event Processing ######################################################
@@ -121,8 +113,8 @@ with pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingO
         for ev in df_tc['event'].unique():
             ev_tc = df_tc[ df_tc.event == ev ]
             ev_3d = df_3d[ df_3d.event == ev ]
-            _simCols_tc = ['tc_mipPt', 'tc_z', 'tc_phi', 'tc_eta',
-                           'Rz', 'genpart_exeta', 'genpart_exphi']
+            _simCols_tc = ['tc_mipPt', 'tc_z', 'tc_eta', 'tc_phi_bin',
+                           'Rz_bin', 'genpart_exeta', 'genpart_exphi']
             ev_tc = ev_tc.filter(items=_simCols_tc)
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
@@ -132,7 +124,7 @@ with pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingO
             ev_3d = ev_3d.drop(['cl3d_Roverz', 'cl3d_eta', 'cl3d_phi'], axis=1)
             assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
 
-            groupby = ev_tc.groupby(['Rz', 'tc_phi'], as_index=False)
+            groupby = ev_tc.groupby(['Rz_bin', 'tc_phi_bin'], as_index=False)
             group = groupby.count()
 
             energy_sum = groupby.sum()['tc_mipPt']

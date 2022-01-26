@@ -33,14 +33,22 @@ BinDistRz = RzBinEdges[1] - RzBinEdges[0] #assumes the binning is regular
 BinDistPhi = PhiBinEdges[1] - PhiBinEdges[0] #assumes the binning is regular
 
 Debug = _flags.debug
-
 DataFolder = 'data'
+FesAlgos = ['Threshold']
 
 # filling task
 FillingIn = 'gen_cl3d_tc.hdf5'
 FillingOut = 'filling.hdf5'
 
 # smoothing task
+BinSums = (13,               # 0
+           11, 11, 11,       # 1 - 3
+           9, 9, 9,          # 4 - 6
+           7, 7, 7, 7, 7, 7,  # 7 - 12
+           5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,  # 13 - 27
+           3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3  # 28 - 41
+           ) #copied from L1Trigger/L1THGCal/python/hgcalBackEndLayer2Producer_cfi.py
+SeedsNormByArea = False
 
 # seeding task
 

@@ -1,5 +1,12 @@
 import numpy as np
 
+def binConv(vals, dist, amin):
+    """
+    Converts bin indexes back to values (central values in the bin).
+    Assumes equally-spaced bins.
+    """
+    return (vals*dist) + (dist/2) + amin
+
 def calculateRoverZfromEta(eta):
     """R/z = arctan(theta) [theta is obtained from pseudo-rapidity, eta]"""
     _theta = 2*np.arctan( np.exp(-1 * eta) )

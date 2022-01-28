@@ -136,4 +136,6 @@ with pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingO
             group.insert(0, 'max_eta', eta_maxs)
             group.insert(0, 'sum_en', energy_sum)
 
+            colsToKeep = ['nhits', 'min_eta', 'max_eta', 'sum_en', 'Rz_bin', 'tc_phi_bin']
+            group = group[ colsToKeep ]
             store[str(_k) + '_' + str(ev)] = group

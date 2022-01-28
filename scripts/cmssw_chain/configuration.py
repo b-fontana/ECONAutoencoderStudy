@@ -49,6 +49,7 @@ BinSums = (13,               # 0
            3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3  # 28 - 41
            ) #copied from L1Trigger/L1THGCal/python/hgcalBackEndLayer2Producer_cfi.py
 SeedsNormByArea = False
+areaPerTriggerCell = 4.91E-05
 
 # seeding task
 

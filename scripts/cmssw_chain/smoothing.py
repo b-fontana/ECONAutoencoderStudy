@@ -4,29 +4,6 @@ import sys; np.set_printoptions(threshold=sys.maxsize)
 import h5py
 import configuration as conf
 
-oldcol = 'sum_en'
-newcol = 'sum_en_smooth'
-
-def getBinContent(df, bin1, bin2, var):
-    try:
-        bin_orig = df.loc[(bin1,bin2)]
-        content = bin_orig[var]
-    except KeyError:
-        content = 0.
-    return content
-
-def setBinContent(val, df, bin1, bin2, var, zerovar):
-    """
-    Sets a single cell (bin1,bin2) with a value for the smoothed energy.
-    If the bin does not exist its "unsmoothed" energy should be first set to zero
-    (otherwise it will be NaN, which will lead to issues during smoothing).
-    """
-    try:
-        bin_orig = df.loc[(bin1,bin2)]
-    except KeyError:
-        df.at[ ( bin1,bin2 ), zerovar ] = 0.
-    df.at[ ( bin1,bin2 ), var ] = val
-
 def smoothAlongRz(arr):
     """
     Smoothes the energy distribution of cluster energies deposited on trigger cells.
@@ -101,12 +78,6 @@ def smoothAlongPhi(arr):
 
     return arr_new * conf.areaPerTriggerCell
 
-def removeOldColumn(df):
-    #remove old energy sum and rename
-    df[oldcol] = df[newcol]
-    df = df.drop(columns=[newcol])
-    return df
-
 def printHistogram(arr):
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
@@ -117,6 +88,13 @@ def printHistogram(arr):
         print()
 
 def createHistogram(event):
+    """
+    Creates a 2D histogram with fixed (R/z vs Phi) size.
+    The input event must be a 2D array where the inner axis encodes, in order:
+    - 1: R/z bin index
+    - 2: Phi bin index
+    - 3: Value of interest ("counts" of the histogram, "z axis")
+    """
     arr = np.zeros((conf.NbinsRz, conf.NbinsPhi))
 
     for ev in event[:]:
@@ -133,18 +111,17 @@ storeOut = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.Smoo
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x]
     for key in keys:
-        ev = createHistogram( storeIn[key] )
+        energies   = createHistogram( storeIn[key][:,[0,1,2]] )
+        weighted_x = createHistogram( storeIn[key][:,[0,1,3]] )
+        weighted_y = createHistogram( storeIn[key][:,[0,1,4]] )
+
         #printHistogram(ev)
-        ev = smoothAlongPhi(ev)
+        energies = smoothAlongPhi(energies)
         #printHistogram(ev)
-        ev = smoothAlongRz(ev)
+        energies = smoothAlongRz(energies)
         #printHistogram(ev)
 
-        storeOut[key] = ev
+        storeOut[key] = (energies, weighted_x, weighted_y)
 
 storeIn.close()
 storeOut.close()
-
-# convert bin ids back to values (central values in the bin) 
-# splittedClusters_tc['Rz'] = binConv(splittedClusters_tc['Rz_bin'], conf.BinDistRz, conf.MinROverZ)
-# splittedClusters_tc['tc_phi'] = binConv(splittedClusters_tc['tc_phi_bin'], conf.BinDistPhi, -np.pi)

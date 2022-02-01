@@ -114,9 +114,13 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
         for ev in df_tc['event'].unique():
             ev_tc = df_tc[ df_tc.event == ev ]
             ev_3d = df_3d[ df_3d.event == ev ]
-            _simCols_tc = ['tc_mipPt', 'tc_z', 'tc_eta', 'tc_phi_bin',
-                           'Rz_bin', 'genpart_exeta', 'genpart_exphi']
+            _simCols_tc = ['tc_phi_bin', 'Rz_bin',
+                           'tc_x', 'tc_y', 'tc_z', 'tc_mipPt', 'tc_eta',
+                           'genpart_exeta', 'genpart_exphi']
             ev_tc = ev_tc.filter(items=_simCols_tc)
+            ev_tc['weighted_x'] = ev_tc['tc_mipPt'] * ev_tc['tc_x'] / ev_tc['tc_z'] 
+            ev_tc['weighted_y'] = ev_tc['tc_mipPt'] * ev_tc['tc_y'] / ev_tc['tc_z']
+
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
 
@@ -125,13 +129,10 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
             ev_3d = ev_3d.drop(['cl3d_Roverz', 'cl3d_eta', 'cl3d_phi'], axis=1)
             assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
 
-            groupby = ev_tc.groupby(['Rz_bin', 'tc_phi_bin'], as_index=False)
-            group = groupby.count()
-
-            energy_sum = groupby.sum()['tc_mipPt']
-            group.insert(0, 'sum_en', energy_sum)
-
-            colsToKeep = ['Rz_bin', 'tc_phi_bin', 'sum_en']
-            group = group[ colsToKeep ]
+            gb = ev_tc.groupby(['Rz_bin', 'tc_phi_bin'], as_index=False)
+            cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'tc_mipPt', 'weighted_x', 'weighted_y']
+            group = gb.sum()[cols_to_keep]
+            group['weighted_x'] /= group['tc_mipPt']
+            group['weighted_y'] /= group['tc_mipPt'] 
 
             store[str(_k) + '_' + str(ev)] = group.to_numpy()

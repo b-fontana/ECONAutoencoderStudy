@@ -54,5 +54,6 @@ SmoothingOut = 'smoothing.hdf5'
 
 # seeding task
 SeedingOut = 'seeding.hdf5'
+histoThreshold = 20.
 
 # clustering task

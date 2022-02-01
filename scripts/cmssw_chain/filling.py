@@ -4,6 +4,7 @@ random.seed(18) # fix seed for reproducibility
 import argparse
 import numpy as np
 import pandas as pd
+import h5py
 import uproot as up
 
 from bokeh.io import export_png
@@ -107,7 +108,7 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
 ### Event Processing ######################################################
-with pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut), mode='w') as store:
+with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut), mode='w') as store:
 
     for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
         for ev in df_tc['event'].unique():
@@ -128,14 +129,9 @@ with pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingO
             group = groupby.count()
 
             energy_sum = groupby.sum()['tc_mipPt']
-            eta_mins = groupby.min()['tc_eta']
-            eta_maxs = groupby.max()['tc_eta']
-
-            group = group.rename(columns={'tc_z': 'nhits'}, errors='raise')
-            group.insert(0, 'min_eta', eta_mins)
-            group.insert(0, 'max_eta', eta_maxs)
             group.insert(0, 'sum_en', energy_sum)
 
-            colsToKeep = ['nhits', 'min_eta', 'max_eta', 'sum_en', 'Rz_bin', 'tc_phi_bin']
+            colsToKeep = ['Rz_bin', 'tc_phi_bin', 'sum_en']
             group = group[ colsToKeep ]
-            store[str(_k) + '_' + str(ev)] = group
+
+            store[str(_k) + '_' + str(ev)] = group.to_numpy()

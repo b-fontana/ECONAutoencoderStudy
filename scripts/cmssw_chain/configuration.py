@@ -53,5 +53,6 @@ areaPerTriggerCell = 4.91E-05
 SmoothingOut = 'smoothing.hdf5'
 
 # seeding task
+SeedingOut = 'seeding.hdf5'
 
 # clustering task

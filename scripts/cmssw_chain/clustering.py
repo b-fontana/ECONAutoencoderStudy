@@ -52,7 +52,7 @@ for falgo in conf.FesAlgos:
         cols = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y',
                 'tc_eta', 'tc_layer', 'tc_mipPt', 'seed_idx', 'seed_energy']
         assert(len(cols)==res.shape[1])
-        storeOut[key] = pd.DataFrame(pd.DataFrame(res, columns=cols))
+        storeOut[key] = pd.DataFrame(res, columns=cols)
 
 storeInSeeds.close()
 storeInTC.close()

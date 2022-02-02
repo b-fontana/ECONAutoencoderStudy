@@ -141,7 +141,7 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
 
             ev_tc['proj_x'] = ev_tc.tc_x / ev_tc.tc_z
             ev_tc['proj_y'] = ev_tc.tc_y / ev_tc.tc_z
-            cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y', 'tc_eta', 'tc_layer']
+            cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y', 'tc_eta', 'tc_layer', 'tc_mipPt']
             ev_tc = ev_tc[cols_to_keep]
             store[str(_k) + '_' + str(ev) + '_tc'] = ev_tc.to_numpy()
             store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep

@@ -1,12 +1,13 @@
 import os
 import numpy as np
+import pandas as pd
 import h5py
 import configuration as conf
         
 # Event by event smoothing
 storeInSeeds  = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.SeedingOut), mode='r')
 storeInTC  = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut), mode='r')
-storeOut = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.ClusteringOut), mode='w')
+storeOut = pd.HDFStore( os.path.join(os.environ['PWD'], conf.DataFolder, conf.ClusteringOut), mode='w')
 
 for falgo in conf.FesAlgos:
     bin_keys = [x for x in storeInSeeds.keys() if falgo in x ]
@@ -47,13 +48,11 @@ for falgo in conf.FesAlgos:
         tc = tc[:][pass_threshold]
         res = np.concatenate((tc, seeds_indexes, seeds_energies), axis=1)
 
-        key = key1.replace('_tc', 'clustered')
-        storeOut[key] = res
+        key = key1.replace('_tc', '_clustered')
         cols = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y',
-                'tc_eta', 'tc_layer', 'seed_idx', 'seed_energy']
+                'tc_eta', 'tc_layer', 'tc_mipPt', 'seed_idx', 'seed_energy']
         assert(len(cols)==res.shape[1])
-        storeOut[key].attrs['columns'] = cols
-        storeOut[key].attrs['doc'] = 'Clustered trigger cells in one event'
+        storeOut[key] = pd.DataFrame(pd.DataFrame(res, columns=cols))
 
 storeInSeeds.close()
 storeInTC.close()

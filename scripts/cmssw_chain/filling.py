@@ -1,6 +1,5 @@
 import os
 import random
-random.seed(18) # fix seed for reproducibility
 import argparse
 import numpy as np
 import pandas as pd
@@ -11,6 +10,7 @@ from bokeh.io import export_png
 from bokeh.plotting import figure
 
 import configuration as conf
+random.seed(conf.Seed) # fix seed for reproducibility
 from utils import calculateRoverZfromEta, binConv
 
 """
@@ -114,7 +114,7 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
         for ev in df_tc['event'].unique():
             ev_tc = df_tc[ df_tc.event == ev ]
             ev_3d = df_3d[ df_3d.event == ev ]
-            _simCols_tc = ['tc_phi_bin', 'Rz_bin',
+            _simCols_tc = ['tc_phi_bin', 'Rz_bin', 'tc_layer',
                            'tc_x', 'tc_y', 'tc_z', 'tc_mipPt', 'tc_eta',
                            'genpart_exeta', 'genpart_exphi']
             ev_tc = ev_tc.filter(items=_simCols_tc)
@@ -135,4 +135,14 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
             group['weighted_x'] /= group['tc_mipPt']
             group['weighted_y'] /= group['tc_mipPt'] 
 
-            store[str(_k) + '_' + str(ev)] = group.to_numpy()
+            store[str(_k) + '_' + str(ev) + '_group'] = group.to_numpy()
+            store[str(_k) + '_' + str(ev) + '_group'].attrs['columns'] = cols_to_keep
+            store[str(_k) + '_' + str(ev) + '_group'].attrs['doc'] = 'R/z vs. Phi histo Info'
+
+            ev_tc['proj_x'] = ev_tc.tc_x / ev_tc.tc_z
+            ev_tc['proj_y'] = ev_tc.tc_y / ev_tc.tc_z
+            cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y', 'tc_eta', 'tc_layer']
+            ev_tc = ev_tc[cols_to_keep]
+            store[str(_k) + '_' + str(ev) + '_tc'] = ev_tc.to_numpy()
+            store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep
+            store[str(_k) + '_' + str(ev) + '_tc'].attrs['doc'] = 'Trigger Cells Info'

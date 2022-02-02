@@ -35,6 +35,7 @@ BinDistPhi = PhiBinEdges[1] - PhiBinEdges[0] #assumes the binning is regular
 Debug = _flags.debug
 DataFolder = 'data'
 FesAlgos = ['Threshold']
+Seed = 18
 
 # filling task
 FillingIn = 'gen_cl3d_tc.hdf5'
@@ -57,3 +58,9 @@ SeedingOut = 'seeding.hdf5'
 histoThreshold = 20.
 
 # clustering task
+ClusteringOut = 'clustering.hdf5'
+CoeffA = ( (0.015,)*7 + (0.020,)*7 + (0.030,)*7 + (0.040,)*7 + #EM
+           (0.040,)*6 + (0.050,)*6 + # FH
+           (0.050,)*12 ) # BH
+CoeffB = 0
+MidRadius = 2.3

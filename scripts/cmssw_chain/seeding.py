@@ -12,7 +12,7 @@ for falgo in conf.FesAlgos:
 
     for key in keys:
         energies, weighted_x, weighted_y = storeIn[key]
-        
+
         # add top and bottom phi rows for boundary conditions
         # fill the rows with negative (unphysical) energy values
         phiPad = -1 * np.zeros((1,conf.NbinsPhi))
@@ -42,9 +42,12 @@ for falgo in conf.FesAlgos:
                    (energies > southeast) & (energies >= southwest) )
 
         seeds_idx = np.nonzero(maxima)
-        res = (weighted_x[seeds_idx], weighted_y[seeds_idx], energies[seeds_idx])
+
+        res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
 
         storeOut[key] = res
+        storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
+        storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions of seeds'
 
 storeIn.close()
 storeOut.close()    

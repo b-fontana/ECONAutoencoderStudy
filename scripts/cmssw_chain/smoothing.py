@@ -109,7 +109,8 @@ storeIn  = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.Fill
 storeOut = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.SmoothingOut), mode='w')
 
 for falgo in conf.FesAlgos:
-    keys = [x for x in storeIn.keys() if falgo in x]
+    keys = [x for x in storeIn.keys() if falgo in x and '_group' in x]
+
     for key in keys:
         energies   = createHistogram( storeIn[key][:,[0,1,2]] )
         weighted_x = createHistogram( storeIn[key][:,[0,1,3]] )
@@ -122,6 +123,9 @@ for falgo in conf.FesAlgos:
         #printHistogram(ev)
 
         storeOut[key] = (energies, weighted_x, weighted_y)
+        storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
+        storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions'
+        
 
 storeIn.close()
 storeOut.close()

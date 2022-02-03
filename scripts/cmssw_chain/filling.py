@@ -11,17 +11,16 @@ from bokeh.plotting import figure
 
 import configuration as conf
 random.seed(conf.Seed) # fix seed for reproducibility
-from utils import calculateRoverZfromEta, binConv
+from utils import calculateRoverZfromEta
 
 """
 Fills split clusters information according to the Stage2 FPGA fixed binning.
 """
 
 ### Data Extraction ####################################################
-simDataPath = os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingIn)
 simAlgoDFs, simAlgoFiles, simAlgoPlots = ({} for _ in range(3))
 for fe in conf.FesAlgos:
-    simAlgoFiles[fe] = [ os.path.join(simDataPath) ]
+    simAlgoFiles[fe] = [ conf.FillingIn ]
 
 for fe,files in simAlgoFiles.items():
     name = fe
@@ -108,12 +107,13 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
 ### Event Processing ######################################################
-with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut), mode='w') as store:
+with h5py.File(conf.FillingOut, mode='w') as store:
 
     for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
         for ev in df_tc['event'].unique():
             ev_tc = df_tc[ df_tc.event == ev ]
             ev_3d = df_3d[ df_3d.event == ev ]
+
             _simCols_tc = ['tc_phi_bin', 'Rz_bin', 'tc_layer',
                            'tc_x', 'tc_y', 'tc_z', 'tc_mipPt', 'tc_eta',
                            'genpart_exeta', 'genpart_exphi']
@@ -124,7 +124,14 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
 
-            cl3d_pos_rz, cl3d_pos_phi = ev_3d['cl3d_Roverz'].unique(), ev_3d['cl3d_phi'].unique()
+            cl3d_pos_rz =  ev_3d['cl3d_Roverz'].unique() 
+            cl3d_pos_phi = ev_3d['cl3d_phi'].unique()
+            cl3d_en = ev_3d['cl3d_energy'].unique()
+
+            store[str(_k) + '_' + str(ev) + '_clpos'] = (cl3d_pos_phi, cl3d_pos_rz, cl3d_en)
+            store[str(_k) + '_' + str(ev) + '_clpos'].attrs['columns'] = ['cl3d_phi', 'cl3d_rz', 'cl3d_en']
+            store[str(_k) + '_' + str(ev) + '_clpos'].attrs['doc'] = 'CMSSW cluster positions.'
+
             gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d['genpart_exphi'].unique()
             ev_3d = ev_3d.drop(['cl3d_Roverz', 'cl3d_eta', 'cl3d_phi'], axis=1)
             assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
@@ -138,10 +145,10 @@ with h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut
             store[str(_k) + '_' + str(ev) + '_group'] = group.to_numpy()
             store[str(_k) + '_' + str(ev) + '_group'].attrs['columns'] = cols_to_keep
             store[str(_k) + '_' + str(ev) + '_group'].attrs['doc'] = 'R/z vs. Phi histo Info'
-
-            ev_tc['proj_x'] = ev_tc.tc_x / ev_tc.tc_z
-            ev_tc['proj_y'] = ev_tc.tc_y / ev_tc.tc_z
-            cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'proj_x', 'proj_y', 'tc_eta', 'tc_layer', 'tc_mipPt']
+            
+            cols_to_keep = ['Rz_bin', 'tc_phi_bin',
+                            'tc_x', 'tc_y', 'tc_z',
+                            'tc_eta', 'tc_layer', 'tc_mipPt']
             ev_tc = ev_tc[cols_to_keep]
             store[str(_k) + '_' + str(ev) + '_tc'] = ev_tc.to_numpy()
             store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep

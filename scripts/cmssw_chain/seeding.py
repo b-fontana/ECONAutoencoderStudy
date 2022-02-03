@@ -4,8 +4,8 @@ import h5py
 import configuration as conf
 
 # Event by event smoothing
-storeIn  = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.SmoothingOut), mode='r')
-storeOut = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.SeedingOut), mode='w')
+storeIn  = h5py.File(conf.SmoothingOut, mode='r')
+storeOut = h5py.File(conf.SeedingOut, mode='w')
 
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x]

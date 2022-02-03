@@ -354,7 +354,6 @@ for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
         ev_3d = ev_3d.drop(['cl3d_Roverz', simNames.eta3d, simNames.phi3d], axis=1)
         assert( len(gen_pos_rz) == 1 and len(gen_pos_phi) == 1 )
 
-        #CHANGE THE LINE BELOW TO GET A WEIGHTED HISTOGRAM
         groupby = ev_tc.groupby([simNames.RoverZ, simNames.phitc], as_index=False)
         group = groupby.count()
 

@@ -1,3 +1,4 @@
+import os
 import argparse
 import numpy as np
 
@@ -36,10 +37,12 @@ Debug = _flags.debug
 DataFolder = 'data'
 FesAlgos = ['Threshold']
 Seed = 18
+BasePath = os.path.join(os.environ['PWD'], DataFolder)
+_fillBasePath = lambda x : os.path.join( BasePath, x)
 
 # filling task
-FillingIn = 'gen_cl3d_tc.hdf5'
-FillingOut = 'filling.hdf5'
+FillingIn = _fillBasePath('gen_cl3d_tc.hdf5')
+FillingOut = _fillBasePath('filling.hdf5')
 
 # smoothing task
 BinSums = (13,               # 0
@@ -51,14 +54,14 @@ BinSums = (13,               # 0
            ) #copied from L1Trigger/L1THGCal/python/hgcalBackEndLayer2Producer_cfi.py
 SeedsNormByArea = False
 areaPerTriggerCell = 4.91E-05
-SmoothingOut = 'smoothing.hdf5'
+SmoothingOut = _fillBasePath('smoothing.hdf5')
 
 # seeding task
-SeedingOut = 'seeding.hdf5'
+SeedingOut = _fillBasePath('seeding.hdf5')
 histoThreshold = 20.
 
 # clustering task
-ClusteringOut = 'clustering.hdf5'
+ClusteringOut = _fillBasePath('clustering.hdf5')
 CoeffA = ( (0.015,)*7 + (0.020,)*7 + (0.030,)*7 + (0.040,)*7 + #EM
            (0.040,)*6 + (0.050,)*6 + # FH
            (0.050,)*12 ) # BH

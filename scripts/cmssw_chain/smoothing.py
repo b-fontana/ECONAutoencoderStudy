@@ -105,8 +105,8 @@ def createHistogram(event):
     return arr
 
 # Event by event smoothing
-storeIn  = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.FillingOut), mode='r')
-storeOut = h5py.File( os.path.join(os.environ['PWD'], conf.DataFolder, conf.SmoothingOut), mode='w')
+storeIn  = h5py.File(conf.FillingOut, mode='r')
+storeOut = h5py.File(conf.SmoothingOut, mode='w')
 
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x and '_group' in x]
@@ -126,6 +126,5 @@ for falgo in conf.FesAlgos:
         storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
         storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions'
         
-
 storeIn.close()
 storeOut.close()

@@ -20,6 +20,7 @@ def smoothAlongRz(arr):
 
     # remove top and bottom phi rows
     arr_new = arr_new[1:arr_new.shape[0]-1]
+    assert(arr_new.shape[0] == conf.NbinsRz)
     return arr_new / weights
 
     # for bin1 in range(conf.NbinsRz):
@@ -66,14 +67,15 @@ def smoothAlongPhi(arr):
         area = area * area_10pct_;
 
     # loop per chunk of (equal Rz) rows with a common shift to speedup
-    # unforutnately np.roll's 'shift' argument must be the same for different rows
+    # unfortunately np.roll's 'shift' argument must be the same for different rows
     for idx in np.unique(nBinsSide):
         roll_indices = np.where(nBinsSide == idx)[0]
         arr_copy = arr[roll_indices,:]
         arr_smooth = arr[roll_indices,:]
         for nside in range(1, int(idx)+1):
-            arr_smooth += ( np.roll(arr_copy, shift=nside,  axis=1) / (2**nside) +
-                            np.roll(arr_copy, shift=-nside, axis=1) / (2**nside) )
+            arr_smooth += ( (np.roll(arr_copy, shift=nside,  axis=1) +
+                             np.roll(arr_copy, shift=-nside, axis=1))
+                            / (2**nside) )
         arr_new[roll_indices,:] = arr_smooth / np.expand_dims(area[roll_indices], axis=-1)
 
     return arr_new * conf.areaPerTriggerCell

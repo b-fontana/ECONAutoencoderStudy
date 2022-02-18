@@ -76,7 +76,6 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     _events_remaining = list(splittedClusters.index.unique())
     _events_sample = random.sample(_events_remaining, conf.Nevents)
     splittedClusters = splittedClusters.loc[_events_sample]
-    #splittedClusters.sample(n=NEVENTS, replace=False, random_state=8)
 
     if conf.Debug:
         print('SplitClusters Dataset: event random selection')
@@ -87,9 +86,9 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     _cl3d_vars = [x for x in splittedClusters.columns.to_list() if 'tc_' not in x]
     splittedClusters_3d = splittedClusters[_cl3d_vars]
     splittedClusters_3d = splittedClusters_3d.reset_index()
-    _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
 
     #trigger cells info is repeated across clusters in the same event
+    _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
     splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
 
     _tc_vars = [x for x in _tc_vars if 'tc_' in x]
@@ -124,9 +123,9 @@ with h5py.File(conf.FillingOut, mode='w') as store:
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
 
-            cl3d_pos_rz =  ev_3d['cl3d_Roverz'].unique() 
+            cl3d_pos_rz  = ev_3d['cl3d_Roverz'].unique() 
             cl3d_pos_phi = ev_3d['cl3d_phi'].unique()
-            cl3d_en = ev_3d['cl3d_energy'].unique()
+            cl3d_en      = ev_3d['cl3d_energy'].unique()
 
             store[str(_k) + '_' + str(ev) + '_clpos'] = (cl3d_pos_phi, cl3d_pos_rz, cl3d_en)
             store[str(_k) + '_' + str(ev) + '_clpos'].attrs['columns'] = ['cl3d_phi', 'cl3d_rz', 'cl3d_en']

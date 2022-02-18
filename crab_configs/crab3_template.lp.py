@@ -28,4 +28,3 @@ config.Data.allowNonValidInputDataset = True
 
 config.section_("Site")
 config.Site.storageSite = 'T2_FR_GRIF_LLR'
-

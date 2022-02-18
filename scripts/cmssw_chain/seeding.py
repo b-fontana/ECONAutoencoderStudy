@@ -13,37 +13,36 @@ for falgo in conf.FesAlgos:
     for key in keys:
         energies, weighted_x, weighted_y = storeIn[key]
 
-        # add top and bottom phi rows for boundary conditions
+        # add unphysical top and bottom R/z rows for edge cases
         # fill the rows with negative (unphysical) energy values
-        phiPad = -1 * np.zeros((1,conf.NbinsPhi))
+        # boundary conditions on the phi axis are satisfied by 'np.roll'
+        phiPad = -1 * np.ones((1,conf.NbinsPhi))
         energies = np.concatenate( (phiPad,energies,phiPad) )
 
-        nrows = energies.shape[0]
-        zeros = np.zeros((nrows,1))
-        ones = np.ones((nrows,1))
-
         #remove padding
-        s = slice(1,energies.shape[0]-1)
+        slc = slice(1,energies.shape[0]-1)
 
-        south = np.roll(energies, shift=1,  axis=0)[s]
-        north = np.roll(energies, shift=-1, axis=0)[s]
-        east  = np.roll(energies, shift=-1, axis=1)[s]
-        west  = np.roll(energies, shift=1,  axis=1)[s]
-        northeast = np.roll(energies, shift=(-1,-1), axis=(0,1))[s]
-        northwest = np.roll(energies, shift=(-1,1),  axis=(0,1))[s]
-        southeast = np.roll(energies, shift=(1,-1),  axis=(0,1))[s]
-        southwest = np.roll(energies, shift=(1,1),   axis=(0,1))[s]
+        south = np.roll(energies, shift=1,  axis=0)[slc]
+        north = np.roll(energies, shift=-1, axis=0)[slc]
+        east  = np.roll(energies, shift=-1, axis=1)[slc]
+        west  = np.roll(energies, shift=1,  axis=1)[slc]
+        northeast = np.roll(energies, shift=(-1,-1), axis=(0,1))[slc]
+        northwest = np.roll(energies, shift=(-1,1),  axis=(0,1))[slc]
+        southeast = np.roll(energies, shift=(1,-1),  axis=(0,1))[slc]
+        southwest = np.roll(energies, shift=(1,1),   axis=(0,1))[slc]
 
-        energies = energies[s]
+        energies = energies[slc]
         
         maxima = ( (energies > conf.histoThreshold ) &
                    (energies >= south) & (energies > north) & (energies >= east) & (energies > west) &
                    (energies >= northeast) & (energies > northwest) &
-                   (energies > southeast) & (energies >= southwest) )
+                   (energies >= southeast) & (energies > southwest) )
 
         seeds_idx = np.nonzero(maxima)
 
         res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
+
+        print(res)
 
         storeOut[key] = res
         storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']

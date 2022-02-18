@@ -96,12 +96,13 @@ def validation():
 
             event_number = re.search('Threshold_([0-9]{1,7})_cl', key1).group(1)
             print('Event: {}'.format(event_number))
-            print('Custom: Phi={}\tRz={}\tEnergy={}'
-                  .format(local['cl3d_phi'].to_numpy(),
+            print('Custom: NClusters={}\tPhi={}\tRz={}\tEnergy={}'
+                  .format(len(local['cl3d_phi'].to_numpy()),
+                          local['cl3d_phi'].to_numpy(),
                           local['cl3d_Rz'].to_numpy(),
                           local['cl3d_en'].to_numpy()))
-            print('CMSSW:  Phi={}\tRz={}\tEnergy={}'
-                  .format(cmssw[:][0], cmssw[:][1], cmssw[:][2]))
+            print('CMSSW:  NClusters={}\tPhi={}\tRz={}\tEnergy={}'
+                  .format(len(cmssw[:][0]), cmssw[:][0], cmssw[:][1], cmssw[:][2]))
             print()
 
 

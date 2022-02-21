@@ -12,6 +12,23 @@ from itertools import chain
 
 workdir=os.getcwd()
 
+disconnectedTriggerLayers = [
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    26,
+    28
+]
+
 def deltar(df):
     df['deta']=df['cl3d_eta']-df['genpart_exeta']
     df['dphi']=np.abs(df['cl3d_phi']-df['genpart_exphi'])
@@ -44,10 +61,12 @@ def create_dataframes(files, algo_trees, gen_tree, p):
             for ib,batch in enumerate(data.iterate(branches_gen, step_size=memsize_gen,
                                                    library='pd')):
 
+                # reachedEE=2: photons that hit HGCAL
                 batch = batch[ batch['genpart_reachedEE']==p.reachedEE ]
                 batch = batch[ batch['genpart_gen']!=-1 ]
                 batch = batch[ batch['genpart_pid']==22 ]
-                batch = batch.drop(columns=['genpart_reachedEE', 'genpart_gen', 'genpart_pid'])
+                #batch = batch.drop(columns=['genpart_reachedEE', 'genpart_gen', 'genpart_pid'])
+                batch = batch.drop(columns=['genpart_gen', 'genpart_pid'])
                 batch = batch[ batch['genpart_exeta']>0  ] #positive endcap only
                 batch.set_index('event', inplace=True)
 
@@ -59,6 +78,8 @@ def create_dataframes(files, algo_trees, gen_tree, p):
 
                 batch = batch[ batch['tc_zside']==1 ] #positive endcap
                 batch = batch.drop(columns=['tc_zside'])
+                #remove layers not read by trigger cells
+                batch = batch[ ~batch['tc_layer'].isin(disconnectedTriggerLayers) ]
                 #convert all the trigger cell hits in each event to a list
                 batch = batch.groupby(by=['event']).aggregate(lambda x: list(x))
                 batches_tc.append(batch)
@@ -86,7 +107,7 @@ event
             # Trick to read layers pTs, which is a vector of vector
             df_algos[algo_name]['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
 
-    return(df_gen, df_algos, df_tc )
+    return (df_gen, df_algos, df_tc)
 
 def preprocessing(param):
     files            = param.files_photons
@@ -95,7 +116,7 @@ def preprocessing(param):
     algo_trees       = param.algo_trees
     output_file_name = param.output_file_name
     bestmatch_only   = param.bestmatch_only
-    sreachedEE        = param.reachedEE
+    reachedEE        = param.reachedEE
 
     gen, algo, tc = create_dataframes(files, algo_trees, gen_tree, param)
 

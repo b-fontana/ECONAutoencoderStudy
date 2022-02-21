@@ -28,8 +28,8 @@ MinROverZ = _flags.minROverZ
 
 NbinsRz = _flags.nrzbins
 NbinsPhi = _flags.nphibins
-RzBinEdges = np.linspace( _flags.minROverZ, _flags.maxROverZ, num=NbinsRz )
-PhiBinEdges = np.linspace( -np.pi, np.pi, num=NbinsPhi )
+RzBinEdges = np.linspace( _flags.minROverZ, _flags.maxROverZ, num=NbinsRz+1 )
+PhiBinEdges = np.linspace( -np.pi, np.pi, num=NbinsPhi+1 )
 BinDistRz = RzBinEdges[1] - RzBinEdges[0] #assumes the binning is regular
 BinDistPhi = PhiBinEdges[1] - PhiBinEdges[0] #assumes the binning is regular
 

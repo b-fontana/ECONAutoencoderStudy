@@ -49,4 +49,4 @@ for falgo in conf.FesAlgos:
         storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions of seeds'
 
 storeIn.close()
-storeOut.close()    
+storeOut.close()

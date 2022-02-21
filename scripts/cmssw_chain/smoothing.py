@@ -60,11 +60,23 @@ def smoothAlongPhi(arr):
         #compute quantities for non-normalised-by-area histoMax
         #The 0.1 factor in bin1_10pct is an attempt to keep the same rough scale for seeds.
         #The exact value is arbitrary.
-        bin1_10pct = int(0.1 * conf.NbinsRz)
+        bin1_10pct = int(0.1) * conf.NbinsRz
         R1_10pct = conf.MinROverZ + bin1_10pct * (conf.MaxROverZ - conf.MinROverZ) / conf.NbinsRz
         R2_10pct = R1_10pct + ((conf.MaxROverZ - conf.MinROverZ) / conf.NbinsRz)
         area_10pct_ = ((np.pi * (R2_10pct**2 - R1_10pct**2)) / conf.NbinsPhi)
         area = area * area_10pct_;
+
+    # print( "nBinsSide=", nBinsSide, "; ",
+    #        "binSums[b1]=", conf.BinSums, "; ",
+    #        "area=", area, "; ",
+    #        "seeds_norm_by_area=", conf.SeedsNormByArea, "; ",
+    #        "area_10pct_=", area_10pct_, "; ",
+    #        "bin1_10pct=", bin1_10pct, "; ",
+    #        "R1_10pct=", R1_10pct, "; ",
+    #        "R2_10pct=", R2_10pct, "; ",
+    #        "kROverZMin_=", conf.MinROverZ, "; ",
+    #        "kROverZMax_=", conf.MaxROverZ, "; "
+    #       )
 
     # loop per chunk of (equal Rz) rows with a common shift to speedup
     # unfortunately np.roll's 'shift' argument must be the same for different rows
@@ -89,6 +101,13 @@ def printHistogram(arr):
                 print('X', end='|')
         print()
 
+def validation(arr):
+    with open('outLocalFirst.txt', 'w') as afile:
+        for bin1 in range(conf.NbinsRz):
+            for bin2 in range(conf.NbinsPhi):
+                afile.write('{}\t{}\t{}\n'.format(bin1, bin2, energies[bin1,bin2]))
+    quit()
+
 def createHistogram(event):
     """
     Creates a 2D histogram with fixed (R/z vs Phi) size.
@@ -100,8 +119,10 @@ def createHistogram(event):
     arr = np.zeros((conf.NbinsRz, conf.NbinsPhi))
 
     for ev in event[:]:
-        rzbin = int(ev[0]-1)
-        phibin = int(ev[1]-1)
+        assert(ev[0] >= 0)
+        assert(ev[1] >= 0)
+        rzbin = int(ev[0])
+        phibin = int(ev[1])
         arr[rzbin,phibin] = ev[2]
 
     return arr
@@ -112,14 +133,18 @@ storeOut = h5py.File(conf.SmoothingOut, mode='w')
 
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x and '_group' in x]
-
+    print(keys)
     for key in keys:
-        energies   = createHistogram( storeIn[key][:,[0,1,2]] )
+        print(key)
+        energies   = createHistogram( storeIn[key][:,[0,1,2]] )            
         weighted_x = createHistogram( storeIn[key][:,[0,1,3]] )
         weighted_y = createHistogram( storeIn[key][:,[0,1,4]] )
 
         #printHistogram(ev)
         energies = smoothAlongPhi(energies)
+        # if '4681' in key:
+        #     validation(energies)
+
         #printHistogram(ev)
         energies = smoothAlongRz(energies)
         #printHistogram(ev)

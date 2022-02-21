@@ -25,8 +25,8 @@ for fe in conf.FesAlgos:
 for fe,files in simAlgoFiles.items():
     name = fe
     dfs = []
-    for file in files:
-        with pd.HDFStore(file, mode='r') as store:
+    for afile in files:
+        with pd.HDFStore(afile, mode='r') as store:
             dfs.append(store[name])
     simAlgoDFs[fe] = pd.concat(dfs)
 
@@ -46,21 +46,21 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
         print(df.filter(regex='cl3d_*.'))
 
     df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
-    df = df[ df['cl3d_eta']>0 ]
+    assert( df[ df['cl3d_eta']<0 ].shape[0] == 0 )
     df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
 
     #### Energy resolution histogram ####
-    hist, edges = np.histogram(df['enres'], density=True, bins=150)
+    # hist, edges = np.histogram(df['enres'], density=True, bins=150)
 
-    p = figure( width=500, height=300, title='Energy Resolution: ' + fe,
-                y_axis_type="log")
-    virtualmin = 1e-4 #avoid log scale issues
-    p.quad(top=hist, bottom=virtualmin, left=edges[:-1], right=edges[1:],
-           fill_color="navy", line_color="white", alpha=0.7)
-    p.line(x=[cut,cut], y=[virtualmin,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
+    # p = figure( width=500, height=300, title='Energy Resolution: ' + fe,
+    #             y_axis_type="log")
+    # virtualmin = 1e-4 #avoid log scale issues
+    # p.quad(top=hist, bottom=virtualmin, left=edges[:-1], right=edges[1:],
+    #        fill_color="navy", line_color="white", alpha=0.7)
+    # p.line(x=[cut,cut], y=[virtualmin,max(hist)], line_color="#ff8888", line_width=4, alpha=0.9, legend_label="Cut")
 
-    outname = os.path.join('out', 'filling_enrescut.png')
-    export_png(p, filename=outname)
+    # outname = os.path.join('out', 'filling_enrescut.png')
+    # export_png(p, filename=outname)
     ######################################
 
     nansel = pd.isna(df['enres']) 
@@ -70,13 +70,16 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     df = pd.concat([df,nandf], sort=False)
 
     # select events with splitted clusters
-    splittedClusters = df[ df['enres'] < cut ]
-
+    # event 4681 is being used for debugging REMOVE!!!!!!
+    debugEvent = 4681
+    splittedClusters = df[ (df['enres'] < cut) | (df.index==debugEvent) ]
+    
     # random pick some events (fixing the seed for reproducibility)
     _events_remaining = list(splittedClusters.index.unique())
-    _events_sample = random.sample(_events_remaining, conf.Nevents)
+    #_events_sample = random.sample(_events_remaining, conf.Nevents)
+    _events_sample = [debugEvent]
     splittedClusters = splittedClusters.loc[_events_sample]
-
+    
     if conf.Debug:
         print('SplitClusters Dataset: event random selection')
         print(splittedClusters)
@@ -90,7 +93,7 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     #trigger cells info is repeated across clusters in the same event
     _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
     splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
-
+    
     _tc_vars = [x for x in _tc_vars if 'tc_' in x]
     splittedClusters_tc = splittedClusters_tc.explode( _tc_vars )
 
@@ -98,10 +101,17 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
         splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
 
     splittedClusters_tc['Rz'] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
-    splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc.Rz > conf.MinROverZ) ]
+    splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc['Rz'] > conf.MinROverZ) ]
     splittedClusters_tc = splittedClusters_tc.reset_index()
-    splittedClusters_tc['Rz_bin'] = pd.cut( splittedClusters_tc.Rz, bins=conf.RzBinEdges, labels=False )
+
+    #pd cut returns np.nan when value lies outside the binning
+    splittedClusters_tc['Rz_bin'] = pd.cut( splittedClusters_tc['Rz'], bins=conf.RzBinEdges, labels=False )
+    nansel = pd.isna(splittedClusters_tc['Rz_bin']) 
+    splittedClusters_tc = splittedClusters_tc[~nansel]
+
     splittedClusters_tc['tc_phi_bin'] = pd.cut( splittedClusters_tc['tc_phi'], bins=conf.PhiBinEdges, labels=False )
+    nansel = pd.isna(splittedClusters_tc['tc_phi_bin']) 
+    splittedClusters_tc = splittedClusters_tc[~nansel]
 
     simAlgoPlots[fe] = (splittedClusters_3d, splittedClusters_tc)
 
@@ -117,8 +127,8 @@ with h5py.File(conf.FillingOut, mode='w') as store:
                            'tc_x', 'tc_y', 'tc_z', 'tc_mipPt', 'tc_eta',
                            'genpart_exeta', 'genpart_exphi']
             ev_tc = ev_tc.filter(items=_simCols_tc)
-            ev_tc['weighted_x'] = ev_tc['tc_mipPt'] * ev_tc['tc_x'] / ev_tc['tc_z'] 
-            ev_tc['weighted_y'] = ev_tc['tc_mipPt'] * ev_tc['tc_y'] / ev_tc['tc_z']
+            ev_tc['weighted_x'] = ev_tc['tc_mipPt'] * ev_tc['tc_x'] / np.abs(ev_tc['tc_z'])
+            ev_tc['weighted_y'] = ev_tc['tc_mipPt'] * ev_tc['tc_y'] / np.abs(ev_tc['tc_z'])
 
             ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
             ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
@@ -138,9 +148,10 @@ with h5py.File(conf.FillingOut, mode='w') as store:
             gb = ev_tc.groupby(['Rz_bin', 'tc_phi_bin'], as_index=False)
             cols_to_keep = ['Rz_bin', 'tc_phi_bin', 'tc_mipPt', 'weighted_x', 'weighted_y']
             group = gb.sum()[cols_to_keep]
+
             group['weighted_x'] /= group['tc_mipPt']
             group['weighted_y'] /= group['tc_mipPt'] 
-
+            
             store[str(_k) + '_' + str(ev) + '_group'] = group.to_numpy()
             store[str(_k) + '_' + str(ev) + '_group'].attrs['columns'] = cols_to_keep
             store[str(_k) + '_' + str(ev) + '_group'].attrs['doc'] = 'R/z vs. Phi histo Info'

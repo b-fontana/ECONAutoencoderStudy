@@ -76,8 +76,8 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     
     # random pick some events (fixing the seed for reproducibility)
     _events_remaining = list(splittedClusters.index.unique())
-    #_events_sample = random.sample(_events_remaining, conf.Nevents)
-    _events_sample = [debugEvent]
+    _events_sample = random.sample(_events_remaining, conf.Nevents)
+    #_events_sample = [debugEvent]
     splittedClusters = splittedClusters.loc[_events_sample]
     
     if conf.Debug:
@@ -124,7 +124,8 @@ with h5py.File(conf.FillingOut, mode='w') as store:
             ev_3d = df_3d[ df_3d.event == ev ]
 
             _simCols_tc = ['tc_phi_bin', 'Rz_bin', 'tc_layer',
-                           'tc_x', 'tc_y', 'tc_z', 'tc_mipPt', 'tc_eta',
+                           'tc_x', 'tc_y', 'tc_z', 'tc_eta',
+                           'tc_mipPt', 'tc_pt', 
                            'genpart_exeta', 'genpart_exphi']
             ev_tc = ev_tc.filter(items=_simCols_tc)
             ev_tc['weighted_x'] = ev_tc['tc_mipPt'] * ev_tc['tc_x'] / np.abs(ev_tc['tc_z'])
@@ -135,10 +136,11 @@ with h5py.File(conf.FillingOut, mode='w') as store:
 
             cl3d_pos_rz  = ev_3d['cl3d_Roverz'].unique() 
             cl3d_pos_phi = ev_3d['cl3d_phi'].unique()
+            cl3d_pos_eta = ev_3d['cl3d_eta'].unique()
             cl3d_en      = ev_3d['cl3d_energy'].unique()
 
-            store[str(_k) + '_' + str(ev) + '_clpos'] = (cl3d_pos_phi, cl3d_pos_rz, cl3d_en)
-            store[str(_k) + '_' + str(ev) + '_clpos'].attrs['columns'] = ['cl3d_phi', 'cl3d_rz', 'cl3d_en']
+            store[str(_k) + '_' + str(ev) + '_clpos'] = (cl3d_pos_eta, cl3d_pos_phi, cl3d_pos_rz, cl3d_en)
+            store[str(_k) + '_' + str(ev) + '_clpos'].attrs['columns'] = ['cl3d_eta', 'cl3d_phi', 'cl3d_rz', 'cl3d_en']
             store[str(_k) + '_' + str(ev) + '_clpos'].attrs['doc'] = 'CMSSW cluster positions.'
 
             gen_pos_rz, gen_pos_phi = ev_3d['gen_Roverz'].unique(), ev_3d['genpart_exphi'].unique()
@@ -158,7 +160,8 @@ with h5py.File(conf.FillingOut, mode='w') as store:
             
             cols_to_keep = ['Rz_bin', 'tc_phi_bin',
                             'tc_x', 'tc_y', 'tc_z',
-                            'tc_eta', 'tc_layer', 'tc_mipPt']
+                            'tc_eta', 'tc_layer',
+                            'tc_mipPt', 'tc_pt']
             ev_tc = ev_tc[cols_to_keep]
             store[str(_k) + '_' + str(ev) + '_tc'] = ev_tc.to_numpy()
             store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep

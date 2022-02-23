@@ -101,12 +101,11 @@ def printHistogram(arr):
                 print('X', end='|')
         print()
 
-def validation(arr):
-    with open('outLocalFirst.txt', 'w') as afile:
+def validation(outName, arr):
+    with open(outName, 'w') as afile:
         for bin1 in range(conf.NbinsRz):
             for bin2 in range(conf.NbinsPhi):
                 afile.write('{}\t{}\t{}\n'.format(bin1, bin2, energies[bin1,bin2]))
-    quit()
 
 def createHistogram(event):
     """
@@ -142,13 +141,9 @@ for falgo in conf.FesAlgos:
 
         #printHistogram(ev)
         energies = smoothAlongPhi(energies)
-        # if '4681' in key:
-        #     validation(energies)
-
         #printHistogram(ev)
         energies = smoothAlongRz(energies)
         #printHistogram(ev)
-
         storeOut[key] = (energies, weighted_x, weighted_y)
         storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
         storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions'

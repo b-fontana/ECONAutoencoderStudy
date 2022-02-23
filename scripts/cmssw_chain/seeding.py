@@ -7,6 +7,10 @@ import configuration as conf
 storeIn  = h5py.File(conf.SmoothingOut, mode='r')
 storeOut = h5py.File(conf.SeedingOut, mode='w')
 
+def validation(outName, arr):
+    with open(outName, 'w') as afile:
+        afile.write('{}\t{}\t{}\n'.format(arr[0], arr[1], arr[2]))
+
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x]
 
@@ -41,11 +45,14 @@ for falgo in conf.FesAlgos:
         seeds_idx = np.nonzero(maxima)
 
         res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
+        # if '4681' in key:
+        #     validation('outLocalSeeding.txt', res)
 
-        print(res)
+        for r1,r2,r3 in zip(res[0],res[1],res[2]):
+            print('E={}\tX={}\tY={}'.format(r1,r2,r3))
 
         storeOut[key] = res
-        storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
+        storeOut[key].attrs['columns'] = ['seedEn', 'seedX', 'seedY']
         storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions of seeds'
 
 storeIn.close()

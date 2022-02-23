@@ -12,27 +12,34 @@ def clustering():
     storeOut = pd.HDFStore(conf.ClusteringOut, mode='w')
 
     for falgo in conf.FesAlgos:
-        bin_keys = [x for x in storeInSeeds.keys() if falgo in x ]
+        seed_keys = [x for x in storeInSeeds.keys() if falgo in x ]
         tc_keys  = [x for x in storeInTC.keys() if falgo in x and '_tc' in x]
-        assert(len(bin_keys) == len(tc_keys))
+        assert(len(seed_keys) == len(tc_keys))
 
         radiusCoeffB = conf.CoeffB
 
-        for key1, key2 in zip(tc_keys, bin_keys):
+        print('CoeffA: ', conf.CoeffA)
+        print('CoeffB: ', conf.CoeffB)
+        print('kMidRadius: ', conf.MidRadius)
+
+        for key1, key2 in zip(tc_keys, seed_keys):
             tc = storeInTC[key1]
+            tc_cols = list(tc.attrs['columns'])
+
+            projx = tc[:,2]/tc[:,4] #tc_x / tc_z
+            projy = tc[:,3]/tc[:,4] #tc_y / tc_z
 
             # check columns via `tc.attrs['columns']`
             radiusCoeffA = np.array( [conf.CoeffA[int(xi)-1] for xi in tc[:,6]] )
             minDist = radiusCoeffA + radiusCoeffB * (conf.MidRadius - np.abs(tc[:,5]))
-
-            energies, weighted_x, weighted_y = storeInSeeds[key2]
+            print('minDist: ', minDist)
+            
+            seedEn, seedX, seedY = storeInSeeds[key2]
 
             dRs = np.array([])
-            for iseed, (en, wx, wy) in enumerate(zip(energies, weighted_x, weighted_y)):
-                projx = tc[:,2]/tc[:,4]
-                projy = tc[:,3]/tc[:,4]
-                dR = np.sqrt( (projx-wx)*(projx-wx) + (projy-wy)*(projy-wy) )
-
+            for iseed, (en, sx, sy) in enumerate(zip(seedEn, seedX, seedY)):
+                dR = np.sqrt( (projx-sx)*(projx-sx) + (projy-sy)*(projy-sy) )
+                print('d: ', dR)
                 if dRs.shape == (0,):
                     dRs = np.expand_dims(dR, axis=-1)
                 else:
@@ -43,27 +50,28 @@ def clustering():
             pass_threshold = np.logical_or.reduce(pass_threshold, axis=1)
 
             seeds_indexes = np.argmin(dRs, axis=1)
-            seeds_energies = np.array( [energies[xi] for xi in seeds_indexes] )
+            seeds_energies = np.array( [seedEn[xi] for xi in seeds_indexes] )
             assert(tc[:].shape[0] == seeds_energies.shape[0]) # axis 0 stands for trigger cells
 
             seeds_indexes  = np.expand_dims( seeds_indexes[pass_threshold], axis=-1 )
             seeds_energies = np.expand_dims( seeds_energies[pass_threshold], axis=-1 )
 
             tc = tc[:][pass_threshold]
+
             res = np.concatenate((tc, seeds_indexes, seeds_energies), axis=1)
 
             key = key1.replace('_tc', '_cl')
-            cols = ['Rz_bin', 'tc_phi_bin', 'tc_x', 'tc_y', 'tc_z',
-                    'tc_eta', 'tc_layer', 'tc_energy', 'seed_idx', 'seed_energy']
+
+            cols = tc_cols + [ 'seed_idx', 'seed_energy']
             assert(len(cols)==res.shape[1])
             df = pd.DataFrame(res, columns=cols)
 
-            df['cl3d_pos_x'] = df['tc_x'] * df['tc_energy']
-            df['cl3d_pos_y'] = df['tc_y'] * df['tc_energy']
-            df['cl3d_pos_z'] = df['tc_z'] * df['tc_energy']
+            df['cl3d_pos_x'] = df['tc_x'] * df['tc_mipPt']
+            df['cl3d_pos_y'] = df['tc_y'] * df['tc_mipPt']
+            df['cl3d_pos_z'] = df['tc_z'] * df['tc_mipPt']
 
-            cl3d = df.groupby(['seed_idx']).sum()[['cl3d_pos_x', 'cl3d_pos_y', 'cl3d_pos_z', 'tc_energy']]
-            cl3d.rename(columns={'tc_energy': 'cl3d_en'}, inplace=True)
+            cl3d = df.groupby(['seed_idx']).sum()[['cl3d_pos_x', 'cl3d_pos_y', 'cl3d_pos_z', 'tc_mipPt']]
+            cl3d.rename(columns={'tc_mipPt': 'cl3d_en'}, inplace=True)
             cl3d['cl3d_pos_x'] /= cl3d['cl3d_en']
             cl3d['cl3d_pos_y'] /= cl3d['cl3d_en']
             cl3d['cl3d_pos_z'] /= cl3d['cl3d_en']

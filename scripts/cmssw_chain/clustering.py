@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import h5py
 import configuration as conf
-        
+from utils import calculateRoverZfromEta
+
 # Event by event smoothing
 def clustering():
     storeInSeeds  = h5py.File(conf.SeedingOut, mode='r')
@@ -61,7 +62,6 @@ def clustering():
             res = np.concatenate((tc, seeds_indexes, seeds_energies), axis=1)
 
             key = key1.replace('_tc', '_cl')
-
             cols = tc_cols + [ 'seed_idx', 'seed_energy']
             assert(len(cols)==res.shape[1])
             df = pd.DataFrame(res, columns=cols)
@@ -70,20 +70,30 @@ def clustering():
             df['cl3d_pos_y'] = df['tc_y'] * df['tc_mipPt']
             df['cl3d_pos_z'] = df['tc_z'] * df['tc_mipPt']
 
-            cl3d = df.groupby(['seed_idx']).sum()[['cl3d_pos_x', 'cl3d_pos_y', 'cl3d_pos_z', 'tc_mipPt']]
-            cl3d.rename(columns={'tc_mipPt': 'cl3d_en'}, inplace=True)
-            cl3d['cl3d_pos_x'] /= cl3d['cl3d_en']
-            cl3d['cl3d_pos_y'] /= cl3d['cl3d_en']
-            cl3d['cl3d_pos_z'] /= cl3d['cl3d_en']
+            cl3d = df.groupby(['seed_idx']).sum()[['cl3d_pos_x', 'cl3d_pos_y', 'cl3d_pos_z', 'tc_mipPt', 'tc_pt']]
+            cl3d.rename(columns={'cl3d_pos_x': 'x',
+                                 'cl3d_pos_y': 'y',
+                                 'cl3d_pos_z': 'z',
+                                 'tc_mipPt':   'mipPt',
+                                 'tc_pt':      'pt'}, inplace=True)
+            cl3d.x /= cl3d.mipPt
+            cl3d.y /= cl3d.mipPt
+            cl3d.z /= cl3d.mipPt
 
-            cl3d['cl3d_Rz'] = np.sqrt(cl3d['cl3d_pos_x']*cl3d['cl3d_pos_x'] + cl3d['cl3d_pos_y']*cl3d['cl3d_pos_y']) / np.abs(cl3d['cl3d_pos_z'])
-            cl3d['cl3d_phi'] = np.arctan2(cl3d['cl3d_pos_y'], cl3d['cl3d_pos_x'])
+            cl3d['x2']   = cl3d.x*cl3d.x
+            cl3d['y2']   = cl3d.y*cl3d.y
+            cl3d['dist'] = np.sqrt(cl3d.x2 + cl3d.y2)
+            #cl3d['Rz']   = cl3d.dist / np.abs(cl3d.z)
+            cl3d['eta']  = np.arcsinh(cl3d.z / cl3d.dist)
+            cl3d['Rz']   = calculateRoverZfromEta(cl3d.eta)
+            cl3d['phi']  = np.arctan2(cl3d.y, cl3d.x)
+            cl3d['en']   = cl3d.pt*np.cosh(cl3d.eta)
 
             event_number = re.search('Threshold_([0-9]{1,7})_tc', key1)
             if not event_number:
                 raise ValueError('The event number was not extracted!')
             cl3d['event'] = event_number.group(1)
-            storeOut[key] = cl3d
+            storeOut[key] = cl3d[['en', 'x', 'y', 'z', 'eta', 'phi', 'Rz']]
 
     storeInSeeds.close()
     storeInTC.close()
@@ -104,15 +114,22 @@ def validation():
 
             event_number = re.search('Threshold_([0-9]{1,7})_cl', key1).group(1)
             print('Event: {}'.format(event_number))
-            print('Custom: NClusters={}\tPhi={}\tRz={}\tEnergy={}'
-                  .format(len(local['cl3d_phi'].to_numpy()),
-                          local['cl3d_phi'].to_numpy(),
-                          local['cl3d_Rz'].to_numpy(),
-                          local['cl3d_en'].to_numpy()))
-            print('CMSSW:  NClusters={}\tPhi={}\tRz={}\tEnergy={}'
-                  .format(len(cmssw[:][0]), cmssw[:][0], cmssw[:][1], cmssw[:][2]))
+            print('Custom: NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
+                  .format(len(local['phi'].to_numpy()),
+                          np.sort(local['eta'].to_numpy()),
+                          np.sort(local['phi'].to_numpy()),
+                          np.sort(local['Rz'].to_numpy()),
+                          np.sort(local['en'].to_numpy())))
+            print('CMSSW:  NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
+                  .format(len(cmssw[:][0]),
+                          np.sort(cmssw[:][0]),
+                          np.sort(cmssw[:][1]),
+                          np.sort(cmssw[:][2]),
+                          np.sort(cmssw[:][3])))
             print()
 
+    storeInLocal.close()
+    storeInCMSSW.close()
 
 clustering()
 validation()

@@ -50,7 +50,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
-    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_mipPt', 'tc_layer',
+    branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_mipPt', 'tc_pt', 'tc_layer',
                     'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta' ]
 
     batches_gen, batches_tc = ([] for _ in range(2))

@@ -1,8 +1,35 @@
 import os
 import numpy as np
-import sys; np.set_printoptions(threshold=sys.maxsize)
 import h5py
 import configuration as conf
+
+
+def valid1(energies, event, infile, outfile):
+    """
+    compares all values of 2d histogram between local and CMSSW versions
+    """
+    flocal  = open('outLocalBeforeSmoothing.txt', 'w')
+    fremote = open('outCMSSWBeforeSmoothing.txt', 'r')
+    lines = fremote.readlines()
+
+    for line in lines:
+        l = line.split('\t')
+        if l[0]=='\n' or '#' in l[0]:
+            continue
+        bin1 = int(l[0])
+        bin2 = int(l[1])
+        val_remote = float(l[2].replace('\n', ''))
+        val_local = energies[bin1,bin2]
+        if abs(val_remote-val_local)>0.0001:
+            print('Diff found! ', bin1, bin2, val_remote, val_local)
+
+    for bin1 in range(conf.NbinsRz):
+        for bin2 in range(conf.NbinsPhi):
+            flocal.write('{}\t{}\t{}\n'.format(bin1, bin2, np.around(energies[bin1,bin2], 6)))
+            
+    flocal.close()
+    fremote.close()
+
 
 def smoothAlongRz(arr):
     """
@@ -132,15 +159,30 @@ storeOut = h5py.File(conf.SmoothingOut, mode='w')
 
 for falgo in conf.FesAlgos:
     keys = [x for x in storeIn.keys() if falgo in x and '_group' in x]
-    print(keys)
+
     for key in keys:
-        print(key)
+        #print(key)
         energies   = createHistogram( storeIn[key][:,[0,1,2]] )            
         weighted_x = createHistogram( storeIn[key][:,[0,1,3]] )
         weighted_y = createHistogram( storeIn[key][:,[0,1,4]] )
 
+        if '187544' in key:
+            valid1(energies, '187544',
+                   infile='outLocalBeforeSmoothing.txt',
+                   outfile='outCMSSWBeforeSmoothing.txt')
+
+            #validation('outLocalBeforeSmoothing.txt', energies)
+        
         #printHistogram(ev)
         energies = smoothAlongPhi(energies)
+
+        # if '187544' in key:
+        #     valid1(energies, '187544',
+        #            infile='outLocalHalfSmoothing.txt',
+        #            outfile='outCMSSWHalfSmoothing.txt')
+
+            #validation('outLocalHalfSmoothing.txt', energies)
+
         #printHistogram(ev)
         energies = smoothAlongRz(energies)
         #printHistogram(ev)

@@ -19,9 +19,9 @@ def clustering():
 
         radiusCoeffB = conf.CoeffB
 
-        print('CoeffA: ', conf.CoeffA)
-        print('CoeffB: ', conf.CoeffB)
-        print('kMidRadius: ', conf.MidRadius)
+        # print('CoeffA: ', conf.CoeffA)
+        # print('CoeffB: ', conf.CoeffB)
+        # print('kMidRadius: ', conf.MidRadius)
 
         for key1, key2 in zip(tc_keys, seed_keys):
             tc = storeInTC[key1]
@@ -33,14 +33,14 @@ def clustering():
             # check columns via `tc.attrs['columns']`
             radiusCoeffA = np.array( [conf.CoeffA[int(xi)-1] for xi in tc[:,6]] )
             minDist = radiusCoeffA + radiusCoeffB * (conf.MidRadius - np.abs(tc[:,5]))
-            print('minDist: ', minDist)
+            # print('minDist: ', minDist)
             
             seedEn, seedX, seedY = storeInSeeds[key2]
 
             dRs = np.array([])
             for iseed, (en, sx, sy) in enumerate(zip(seedEn, seedX, seedY)):
                 dR = np.sqrt( (projx-sx)*(projx-sx) + (projy-sy)*(projy-sy) )
-                print('d: ', dR)
+                # print('d: ', dR)
                 if dRs.shape == (0,):
                     dRs = np.expand_dims(dR, axis=-1)
                 else:
@@ -113,20 +113,29 @@ def validation():
             cmssw = storeInCMSSW[key2]
 
             event_number = re.search('Threshold_([0-9]{1,7})_cl', key1).group(1)
-            print('Event: {}'.format(event_number))
-            print('Custom: NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
-                  .format(len(local['phi'].to_numpy()),
-                          np.sort(local['eta'].to_numpy()),
-                          np.sort(local['phi'].to_numpy()),
-                          np.sort(local['Rz'].to_numpy()),
-                          np.sort(local['en'].to_numpy())))
-            print('CMSSW:  NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
-                  .format(len(cmssw[:][0]),
-                          np.sort(cmssw[:][0]),
-                          np.sort(cmssw[:][1]),
-                          np.sort(cmssw[:][2]),
-                          np.sort(cmssw[:][3])))
-            print()
+            nlocal = len(local['phi'].to_numpy())
+            nremote = len(cmssw[:][0])
+
+            # print('Event: {}'.format(event_number))
+            # print('Custom: NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
+            #       .format(len(local['phi'].to_numpy()),
+            #               np.sort(local['eta'].to_numpy()),
+            #               np.sort(local['phi'].to_numpy()),
+            #               np.sort(local['Rz'].to_numpy()),
+            #               np.sort(local['en'].to_numpy())))
+            # print('CMSSW:  NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
+            #       .format(len(cmssw[:][0]),
+            #               np.sort(cmssw[:][0]),
+            #               np.sort(cmssw[:][1]),
+            #               np.sort(cmssw[:][2]),
+            #               np.sort(cmssw[:][3])))
+            # print()
+
+            if (nlocal != nremote):
+                print('Event:{}\tNlocal={}\tNremote={}'.format(event_number, nlocal, nremote))
+
+
+
 
     storeInLocal.close()
     storeInCMSSW.close()

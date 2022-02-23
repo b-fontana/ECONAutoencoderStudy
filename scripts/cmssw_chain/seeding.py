@@ -4,19 +4,16 @@ import numpy as np
 import h5py
 import configuration as conf
 
-import sys
-sys.path.append(os.path.join(os.environ['PWD'], 'scripts'))
-
 # Event by event smoothing
 storeIn  = h5py.File(conf.SmoothingOut, mode='r')
 storeOut = h5py.File(conf.SeedingOut, mode='w')
 
-def validation(mipPts, event):
+def validation(mipPts, event, infile, outfile):
     """
     compares all values of 2d histogram between local and CMSSW versions
     """
-    flocal  = open('outLocalFirst.txt', 'w')
-    fremote = open('outCMSSWSmooth2.txt', 'r')
+    flocal  = open('outLocalBeforeSeeding.txt', 'w')
+    fremote = open('outCMSSWBeforeSeeding.txt', 'r')
     lines = fremote.readlines()
 
     for line in lines:
@@ -43,8 +40,10 @@ def seeding():
 
         for key in keys:
             energies, weighted_x, weighted_y = storeIn[key]
-            if '4681' in key:
-                validation(energies, '4681')
+            if '187544' in key:
+                 validation(energies, '187544',
+                            infile='outLocalBeforeSeeding.txt',
+                            outfile='outCMSSWBeforeSeeding.txt')
 
             # add unphysical top and bottom R/z rows for edge cases
             # fill the rows with negative (unphysical) energy values

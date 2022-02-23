@@ -37,54 +37,57 @@ def validation(mipPts, event):
     flocal.close()
     fremote.close()
 
-for falgo in conf.FesAlgos:
-    keys = [x for x in storeIn.keys() if falgo in x]
+def seeding():
+    for falgo in conf.FesAlgos:
+        keys = [x for x in storeIn.keys() if falgo in x]
 
-    for key in keys:
-        energies, weighted_x, weighted_y = storeIn[key]
-        if '4681' in key:
-            validation(energies, '4681')
+        for key in keys:
+            energies, weighted_x, weighted_y = storeIn[key]
+            if '4681' in key:
+                validation(energies, '4681')
 
-        # add unphysical top and bottom R/z rows for edge cases
-        # fill the rows with negative (unphysical) energy values
-        # boundary conditions on the phi axis are satisfied by 'np.roll'
-        phiPad = -1 * np.ones((1,conf.NbinsPhi))
-        energies = np.concatenate( (phiPad,energies,phiPad) )
-        
-        #remove padding
-        slc = slice(1,energies.shape[0]-1)
+            # add unphysical top and bottom R/z rows for edge cases
+            # fill the rows with negative (unphysical) energy values
+            # boundary conditions on the phi axis are satisfied by 'np.roll'
+            phiPad = -1 * np.ones((1,conf.NbinsPhi))
+            energies = np.concatenate( (phiPad,energies,phiPad) )
 
-        south = np.roll(energies, shift=1,  axis=0)[slc]
-        north = np.roll(energies, shift=-1, axis=0)[slc]
-        east  = np.roll(energies, shift=-1, axis=1)[slc]
-        west  = np.roll(energies, shift=1,  axis=1)[slc]
-        northeast = np.roll(energies, shift=(-1,-1), axis=(0,1))[slc]
-        northwest = np.roll(energies, shift=(-1,1),  axis=(0,1))[slc]
-        southeast = np.roll(energies, shift=(1,-1),  axis=(0,1))[slc]
-        southwest = np.roll(energies, shift=(1,1),   axis=(0,1))[slc]
+            #remove padding
+            slc = slice(1,energies.shape[0]-1)
 
-        energies = energies[slc]
-        
-        maxima = ( (energies > conf.histoThreshold ) &
-                   (energies >= south) & (energies > north) &
-                   (energies >= east) & (energies > west) &
-                   (energies >= northeast) & (energies > northwest) &
-                   (energies >= southeast) & (energies > southwest) )
+            south = np.roll(energies, shift=1,  axis=0)[slc]
+            north = np.roll(energies, shift=-1, axis=0)[slc]
+            east  = np.roll(energies, shift=-1, axis=1)[slc]
+            west  = np.roll(energies, shift=1,  axis=1)[slc]
+            northeast = np.roll(energies, shift=(-1,-1), axis=(0,1))[slc]
+            northwest = np.roll(energies, shift=(-1,1),  axis=(0,1))[slc]
+            southeast = np.roll(energies, shift=(1,-1),  axis=(0,1))[slc]
+            southwest = np.roll(energies, shift=(1,1),   axis=(0,1))[slc]
 
-        seeds_idx = np.nonzero(maxima)
+            energies = energies[slc]
 
-        res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
-        # if '187603' in key: #'28274'
-        #     breakpoint()
-        event_number = re.search('Threshold_([0-9]{1,7})_group', key).group(1)
-        print('Ev:{}'.format(event_number))
-        print('Seeds bins: {}'.format(seeds_idx))
-        print('NSeeds={}\tMipPt={}\tX={}\tY={}\n'
-              .format(len(res[0]), res[0], res[1], res[2]) )
+            maxima = ( (energies > conf.histoThreshold ) &
+                       (energies >= south) & (energies > north) &
+                       (energies >= east) & (energies > west) &
+                       (energies >= northeast) & (energies > northwest) &
+                       (energies >= southeast) & (energies > southwest) )
 
-        storeOut[key] = res
-        storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
-        storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions of seeds'
+            seeds_idx = np.nonzero(maxima)
 
-storeIn.close()
-storeOut.close()
+            res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
+            # if '187603' in key: #'28274'
+            #     breakpoint()
+            event_number = re.search('Threshold_([0-9]{1,7})_group', key).group(1)
+            print('Ev:{}'.format(event_number))
+            print('Seeds bins: {}'.format(seeds_idx))
+            print('NSeeds={}\tMipPt={}\tX={}\tY={}\n'
+                  .format(len(res[0]), res[0], res[1], res[2]) )
+
+            storeOut[key] = res
+            storeOut[key].attrs['columns'] = ['energies', 'weighted_x', 'weighted_y']
+            storeOut[key].attrs['doc'] = 'Smoothed energies and projected bin positions of seeds'
+
+    storeIn.close()
+    storeOut.close()
+
+seeding()

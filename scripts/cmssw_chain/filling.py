@@ -76,8 +76,8 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     
     # random pick some events (fixing the seed for reproducibility)
     _events_remaining = list(splittedClusters.index.unique())
-    _events_sample = random.sample(_events_remaining, conf.Nevents)
-    #_events_sample = [debugEvent]
+    #_events_sample = random.sample(_events_remaining, conf.Nevents)
+    _events_sample = [debugEvent]
     splittedClusters = splittedClusters.loc[_events_sample]
     
     if conf.Debug:

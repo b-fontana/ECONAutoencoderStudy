@@ -106,7 +106,6 @@ def validation(arr):
         for bin1 in range(conf.NbinsRz):
             for bin2 in range(conf.NbinsPhi):
                 afile.write('{}\t{}\t{}\n'.format(bin1, bin2, energies[bin1,bin2]))
-    quit()
 
 def createHistogram(event):
     """

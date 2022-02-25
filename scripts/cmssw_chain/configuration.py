@@ -35,7 +35,7 @@ BinDistPhi = PhiBinEdges[1] - PhiBinEdges[0] #assumes the binning is regular
 
 Debug = _flags.debug
 DataFolder = 'data'
-FesAlgos = ['Threshold']
+FesAlgos = ['ThresholdDummyHistomaxnoareath20']
 Seed = 18
 BasePath = os.path.join(os.environ['PWD'], DataFolder)
 _fillBasePath = lambda x : os.path.join( BasePath, x)

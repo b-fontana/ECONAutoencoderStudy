@@ -43,10 +43,15 @@ else:
 output_file_name = 'gen_cl3d_tc.hdf5'
 
 # List of ECON algorithms
-fes = [ 'Threshold' ]
-ntuple_template = 'Floatingpoint{fe}Dummy{be}Genclustersntuple/HGCalTriggerNtuple'
+fes = [ 'ThresholdDummyHistomaxnoareath20',
+        #
+       ]
+# other possibilities:
+# 'ThresholdTruncation120default'Histomax''
+# 'ThresholdTruncation120flat'Histomaxxydr015
+
+ntuple_template = 'Floatingpoint{fe}Genclustersntuple/HGCalTriggerNtuple'
 algo_trees = {}
 for fe in fes:
-    be = 'Histomaxnoareath20'
     algo_trees[fe] = ntuple_template.format(fe=fe, be=be)
     assert(algo_trees[fe] == gen_tree) #remove ass soon as other algorithms are considered

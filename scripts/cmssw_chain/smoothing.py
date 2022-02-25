@@ -4,7 +4,7 @@ import h5py
 import configuration as conf
 
 
-def valid1(energies, event, infile, outfile):
+def valid1(energies, infile, outfile):
     """
     compares all values of 2d histogram between local and CMSSW versions
     """
@@ -20,8 +20,8 @@ def valid1(energies, event, infile, outfile):
         bin2 = int(l[1])
         val_remote = float(l[2].replace('\n', ''))
         val_local = energies[bin1,bin2]
-        if abs(val_remote-val_local)>0.0001:
-            print('Diff found! ', bin1, bin2, val_remote, val_local)
+        if abs(val_remote-val_local)>0.001:
+            print('Diff found! Bin1={}\t Bin2={}\tRemote={}\tLocal={}'.format(bin1, bin2, val_remote, val_local))
 
     for bin1 in range(conf.NbinsRz):
         for bin2 in range(conf.NbinsPhi):
@@ -167,7 +167,7 @@ for falgo in conf.FesAlgos:
         weighted_y = createHistogram( storeIn[key][:,[0,1,4]] )
 
         if '187544' in key:
-            valid1(energies, '187544',
+            valid1(energies,
                    infile='outLocalBeforeSmoothing.txt',
                    outfile='outCMSSWBeforeSmoothing.txt')
 

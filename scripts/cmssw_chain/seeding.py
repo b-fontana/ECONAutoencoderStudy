@@ -13,7 +13,7 @@ def validation(mipPts, event, infile, outfile):
     compares all values of 2d histogram between local and CMSSW versions
     """
     flocal  = open('outLocalBeforeSeeding.txt', 'w')
-    fremote = open('outCMSSWBeforeSeeding.txt', 'r')
+    fremote = open('outCMSSWSmoothBeforeSeeding.txt', 'r')
     lines = fremote.readlines()
 
     for line in lines:
@@ -25,7 +25,8 @@ def validation(mipPts, event, infile, outfile):
         val_remote = float(l[2].replace('\n', ''))
         val_local = mipPts[bin1,bin2]
         if abs(val_remote-val_local)>0.0001:
-            print('Diff found! ', bin1, bin2, val_remote, val_local)
+            print('Diff found! Bin1={}\t Bin2={}\tRemote={}\tLocal={}'.format(bin1, bin2, val_remote, val_local))
+            
 
     for bin1 in range(conf.NbinsRz):
         for bin2 in range(conf.NbinsPhi):
@@ -37,6 +38,7 @@ def validation(mipPts, event, infile, outfile):
 def seeding():
     for falgo in conf.FesAlgos:
         keys = [x for x in storeIn.keys() if falgo in x]
+        print(keys)
 
         for key in keys:
             energies, weighted_x, weighted_y = storeIn[key]
@@ -76,7 +78,10 @@ def seeding():
             res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
             # if '187603' in key: #'28274'
             #     breakpoint()
-            event_number = re.search('Threshold_([0-9]{1,7})_group', key).group(1)
+
+            assert(len(conf.FesAlgos)==1)
+            event_number = re.search('{}_([0-9]{{1,7}})_group'.format(conf.FesAlgos[0]),
+                                                                    key).group(1)
             print('Ev:{}'.format(event_number))
             print('Seeds bins: {}'.format(seeds_idx))
             print('NSeeds={}\tMipPt={}\tX={}\tY={}\n'

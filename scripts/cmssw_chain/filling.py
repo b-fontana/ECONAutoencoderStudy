@@ -17,6 +17,25 @@ from utils import calculateRoverZfromEta
 Fills split clusters information according to the Stage2 FPGA fixed binning.
 """
 
+class SupressSettingWithCopyWarning:
+    """
+    Temporarily supress pandas SettingWithCopyWarning.
+    It is known to ocasionally provide false positives.
+    https://stackoverflow.com/questions/20625582/how-to-deal-with-settingwithcopywarning-in-pandas
+    """
+    def __init__(self, chained=None):
+        acceptable = [None, 'warn', 'raise']
+        assert chained in acceptable, "chained must be in " + str(acceptable)
+        self.swcw = chained
+
+    def __enter__(self):
+        self.saved_swcw = pd.options.mode.chained_assignment
+        pd.options.mode.chained_assignment = self.swcw
+        return self
+
+    def __exit__(self, *args):
+        pd.options.mode.chained_assignment = self.saved_swcw
+
 ### Data Extraction ####################################################
 simAlgoDFs, simAlgoFiles, simAlgoPlots = ({} for _ in range(3))
 for fe in conf.FesAlgos:
@@ -37,6 +56,7 @@ if conf.Debug:
 
 ### Data Processing ######################################################
 enrescuts = [-0.35]
+
 assert(len(enrescuts)==len(conf.FesAlgos))
 for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     df = simAlgoDFs[fe]
@@ -47,7 +67,10 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
 
     df = df[ (df['genpart_exeta']>1.7) & (df['genpart_exeta']<2.8) ]
     assert( df[ df['cl3d_eta']<0 ].shape[0] == 0 )
-    df['enres'] = ( df['cl3d_energy']-df['genpart_energy'] ) / df['genpart_energy']
+
+    with SupressSettingWithCopyWarning():
+        df.loc[:,'enres'] = df.loc[:,'cl3d_energy']-df.loc[:,'genpart_energy']
+        df.loc[:,'enres'] /= df.loc[:,'genpart_energy']
 
     #### Energy resolution histogram ####
     # hist, edges = np.histogram(df['enres'], density=True, bins=150)
@@ -71,9 +94,10 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
 
     # select events with splitted clusters
     # event 4681 is being used for debugging REMOVE!!!!!!
-    debugEvent = 4681
-    splittedClusters = df[ (df['enres'] < cut) | (df.index==debugEvent) ]
-    
+    # debugEvent = 4681
+    # splittedClusters = df[ (df['enres'] < cut) | (df.index==debugEvent) ]
+    splittedClusters = df[ (df['enres'] < cut) ]
+
     # random pick some events (fixing the seed for reproducibility)
     _events_remaining = list(splittedClusters.index.unique())
     if conf.Nevents == -1:
@@ -105,7 +129,8 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
         splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
 
     splittedClusters_tc['Rz'] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
-    splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc['Rz'] > conf.MinROverZ) ]
+    # splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc['Rz'] > conf.MinROverZ) ]
+
     splittedClusters_tc = splittedClusters_tc.reset_index()
 
     #pd cut returns np.nan when value lies outside the binning
@@ -135,8 +160,9 @@ with h5py.File(conf.FillingOut, mode='w') as store:
             ev_tc['weighted_x'] = ev_tc['tc_mipPt'] * ev_tc['tc_x'] / np.abs(ev_tc['tc_z'])
             ev_tc['weighted_y'] = ev_tc['tc_mipPt'] * ev_tc['tc_y'] / np.abs(ev_tc['tc_z'])
 
-            ev_3d['cl3d_Roverz'] = calculateRoverZfromEta(ev_3d['cl3d_eta'])
-            ev_3d['gen_Roverz']  = calculateRoverZfromEta(ev_3d['genpart_exeta'])
+            with SupressSettingWithCopyWarning():
+                ev_3d.loc[:,'cl3d_Roverz'] = calculateRoverZfromEta(ev_3d.loc[:,'cl3d_eta'])
+                ev_3d.loc[:,'gen_Roverz']  = calculateRoverZfromEta(ev_3d.loc[:,'genpart_exeta'])
 
             cl3d_pos_rz  = ev_3d['cl3d_Roverz'].unique() 
             cl3d_pos_phi = ev_3d['cl3d_phi'].unique()

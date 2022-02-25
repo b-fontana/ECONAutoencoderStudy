@@ -67,3 +67,4 @@ CoeffA = ( (0.015,)*7 + (0.020,)*7 + (0.030,)*7 + (0.040,)*7 + #EM
            (0.050,)*12 ) # BH
 CoeffB = 0
 MidRadius = 2.3
+PtC3dThreshold = 0.5

@@ -69,11 +69,13 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
     df = df[~nansel]
     df = pd.concat([df,nandf], sort=False)
 
-    # select events with splitted clusters
-    # event 4681 is being used for debugging REMOVE!!!!!!
-    debugEvent = 4681
-    splittedClusters = df[ (df['enres'] < cut) | (df.index==debugEvent) ]
-    
+    # select events with splitted clusters (enres < energy cut)
+    # if an event has at least one cluster satisfying the enres condition,
+    # all of its clusters are kept (this eases comparison with CMSSW)
+    df.loc[:,'atLeastOne'] = df.groupby(['event']).apply(lambda grp: np.any(grp['enres'] < cut) )
+    splittedClusters = df[ df['atLeastOne'] ]
+    splittedClusters.drop(['atLeastOne'], axis=1)
+
     # random pick some events (fixing the seed for reproducibility)
     _events_remaining = list(splittedClusters.index.unique())
     if conf.Nevents == -1:
@@ -81,7 +83,6 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
                                        len(_events_remaining))
     else:
         _events_sample = random.sample(_events_remaining, conf.Nevents)
-    #_events_sample = [debugEvent]
     splittedClusters = splittedClusters.loc[_events_sample]
     
     if conf.Debug:
@@ -91,9 +92,10 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
 
     #splitting remaining data into cluster and tc to avoid tc data duplication
     _cl3d_vars = [x for x in splittedClusters.columns.to_list() if 'tc_' not in x]
+    breakpoint()
     splittedClusters_3d = splittedClusters[_cl3d_vars]
     splittedClusters_3d = splittedClusters_3d.reset_index()
-
+    
     #trigger cells info is repeated across clusters in the same event
     _tc_vars = [x for x in splittedClusters.columns.to_list() if 'cl3d' not in x]
     splittedClusters_tc = splittedClusters.groupby("event").head(1)[_tc_vars] #first() instead of head(1) also works
@@ -105,7 +107,7 @@ for i,(fe,cut) in enumerate(zip(conf.FesAlgos,enrescuts)):
         splittedClusters_tc[v] = splittedClusters_tc[v].astype(np.float64)
 
     splittedClusters_tc['Rz'] = np.sqrt(splittedClusters_tc.tc_x*splittedClusters_tc.tc_x + splittedClusters_tc.tc_y*splittedClusters_tc.tc_y)  / abs(splittedClusters_tc.tc_z)
-    splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc['Rz'] > conf.MinROverZ) ]
+    #splittedClusters_tc = splittedClusters_tc[ (splittedClusters_tc['Rz'] < conf.MaxROverZ) & (splittedClusters_tc['Rz'] > conf.MinROverZ) ]
     splittedClusters_tc = splittedClusters_tc.reset_index()
 
     #pd cut returns np.nan when value lies outside the binning

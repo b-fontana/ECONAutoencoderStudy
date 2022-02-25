@@ -1,27 +1,24 @@
-import os
 import re
 import numpy as np
 import pandas as pd
 import h5py
-import configuration as conf
 from utils import calculateRoverZfromEta
 
-# Event by event smoothing
-def clustering():
-    storeInSeeds  = h5py.File(conf.SeedingOut, mode='r')
-    storeInTC  = h5py.File(conf.FillingOut, mode='r')
-    storeOut = pd.HDFStore(conf.ClusteringOut, mode='w')
+def clustering(**kwargs):
+    storeInSeeds  = h5py.File(kwargs['SeedingOut'], mode='r')
+    storeInTC  = h5py.File(kwargs['ClusteringInTC'], mode='r')
+    storeOut = pd.HDFStore(kwargs['ClusteringOut'], mode='w')
 
-    for falgo in conf.FesAlgos:
+    for falgo in kwargs['FesAlgos']:
         seed_keys = [x for x in storeInSeeds.keys() if falgo in x ]
         tc_keys  = [x for x in storeInTC.keys() if falgo in x and '_tc' in x]
         assert(len(seed_keys) == len(tc_keys))
 
-        radiusCoeffB = conf.CoeffB
+        radiusCoeffB = kwargs['CoeffB']
 
-        # print('CoeffA: ', conf.CoeffA)
-        # print('CoeffB: ', conf.CoeffB)
-        # print('kMidRadius: ', conf.MidRadius)
+        # print('CoeffA: ', kwargs['CoeffA'])
+        # print('CoeffB: ', kwargs['CoeffB'])
+        # print('kMidRadius: ', kwargs['MidRadius'])
 
         for key1, key2 in zip(tc_keys, seed_keys):
             tc = storeInTC[key1]
@@ -31,8 +28,8 @@ def clustering():
             projy = tc[:,3]/tc[:,4] #tc_y / tc_z
 
             # check columns via `tc.attrs['columns']`
-            radiusCoeffA = np.array( [conf.CoeffA[int(xi)-1] for xi in tc[:,6]] )
-            minDist = radiusCoeffA + radiusCoeffB * (conf.MidRadius - np.abs(tc[:,5]))
+            radiusCoeffA = np.array( [kwargs['CoeffA'][int(xi)-1] for xi in tc[:,6]] )
+            minDist = radiusCoeffA + radiusCoeffB * (kwargs['MidRadius'] - np.abs(tc[:,5]))
             # print('minDist: ', minDist)
             
             seedEn, seedX, seedY = storeInSeeds[key2]
@@ -77,7 +74,7 @@ def clustering():
                                  'tc_mipPt':   'mipPt',
                                  'tc_pt':      'pt'}, inplace=True)
 
-            cl3d = cl3d[ cl3d.pt > conf.PtC3dThreshold ]
+            cl3d = cl3d[ cl3d.pt > kwargs['PtC3dThreshold'] ]
             
             cl3d.x /= cl3d.mipPt
             cl3d.y /= cl3d.mipPt
@@ -92,7 +89,7 @@ def clustering():
             cl3d['phi']  = np.arctan2(cl3d.y, cl3d.x)
             cl3d['en']   = cl3d.pt*np.cosh(cl3d.eta)
 
-            event_number = re.search('Threshold_([0-9]{1,7})_tc', key1)
+            event_number = re.search('{}_([0-9]{{1,7}})_tc'.format(kwargs['FesAlgos'][0]), key1)
 
             if not event_number:
                 raise ValueError('The event number was not extracted!')
@@ -103,49 +100,5 @@ def clustering():
     storeInTC.close()
     storeOut.close()
 
-def validation():
-    storeInLocal = pd.HDFStore(conf.ClusteringOut, mode='r')
-    storeInCMSSW = h5py.File(conf.FillingOut, mode='r')
-
-    for falgo in conf.FesAlgos:
-        local_keys = [x for x in storeInLocal.keys() if falgo in x]
-        cmssw_keys = [x for x in storeInCMSSW.keys() if falgo in x and '_clpos' in x]
-        assert(len(local_keys) == len(cmssw_keys))
-
-        for key1, key2 in zip(local_keys, cmssw_keys):
-            local = storeInLocal[key1]
-            cmssw = storeInCMSSW[key2]
-
-            event_number = re.search('Threshold_([0-9]{1,7})_cl', key1).group(1)
-
-            locEta = np.sort(local['eta'].to_numpy())
-            locPhi = np.sort(local['phi'].to_numpy())
-            locRz  = np.sort(local['Rz'].to_numpy())
-            locEn  = np.sort(local['en'].to_numpy())
-            remEta = np.sort(cmssw[:][0])
-            remPhi = np.sort(cmssw[:][1])
-            remRz  = np.sort(cmssw[:][2])
-            remEn  = np.sort(cmssw[:][3])
-
-            assert( len(locEta) == len(remEta) )
-            assert( len(locPhi) == len(remPhi) )
-            assert( len(locRz) == len(remRz) )
-            assert( len(locEn) == len(remEn) )
-
-            errorThreshold = .5E-3
-            for i in range(len(locEta)):
-                if ( abs(locEta[i] - remEta[i]) > errorThreshold or
-                     abs(locPhi[i] - remPhi[i]) > errorThreshold or
-                     abs(locRz[i]  - remRz[i])  > errorThreshold  or
-                     abs(locEn[i]  - remEn[i])  > errorThreshold ):
-                    print('Difference found in event {}!'.format(event_number))
-                    print('\tEta difference: {}'.format(locEta[i] - remEta[i]))
-                    print('\tPhi difference: {}'.format(locPhi[i] - remPhi[i]))
-                    print('\tRz difference: {}'.format(locRz[i] - remRz[i]))
-                    print('\tEn difference: {}'.format(locEn[i] - remEn[i]))
-
-    storeInLocal.close()
-    storeInCMSSW.close()
-
-clustering()
-validation()
+########################################################################
+# clustering()

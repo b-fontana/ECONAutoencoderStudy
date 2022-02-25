@@ -1,14 +1,9 @@
-import os
 import re
 import numpy as np
 import h5py
-import configuration as conf
 
-# Event by event smoothing
-storeIn  = h5py.File(conf.SmoothingOut, mode='r')
-storeOut = h5py.File(conf.SeedingOut, mode='w')
-
-def validation(mipPts, event, infile, outfile):
+def validation(mipPts, event, infile, outfile,
+               nbinsRz, nbinsPhi):
     """
     compares all values of 2d histogram between local and CMSSW versions
     """
@@ -27,29 +22,34 @@ def validation(mipPts, event, infile, outfile):
         if abs(val_remote-val_local)>0.0001:
             print('Diff found! Bin1={}\t Bin2={}\tRemote={}\tLocal={}'.format(bin1, bin2, val_remote, val_local))
 
-    for bin1 in range(conf.NbinsRz):
-        for bin2 in range(conf.NbinsPhi):
+    for bin1 in range(nbinsRz):
+        for bin2 in range(nbinsPhi):
             flocal.write('{}\t{}\t{}\n'.format(bin1, bin2, np.around(mipPts[bin1,bin2], 6)))
             
     flocal.close()
     fremote.close()
 
-def seeding():
-    for falgo in conf.FesAlgos:
+def seeding(**kwargs):
+    storeIn  = h5py.File(kwargs['SeedingIn'],  mode='r')
+    storeOut = h5py.File(kwargs['SeedingOut'], mode='w')
+
+    for falgo in kwargs['FesAlgos']:
         keys = [x for x in storeIn.keys() if falgo in x]
         print(keys)
 
         for key in keys:
             energies, weighted_x, weighted_y = storeIn[key]
+
             # if '187544' in key:
             #      validation(energies, '187544',
             #                 infile='outLocalBeforeSeeding.txt',
-            #                 outfile='outCMSSWBeforeSeeding.txt')
+            #                 outfile='outCMSSWBeforeSeeding.txt',
+            #                 kwargs['NbinsRz'], kwargs['NbinsPhi'] )
 
             # add unphysical top and bottom R/z rows for edge cases
             # fill the rows with negative (unphysical) energy values
             # boundary conditions on the phi axis are satisfied by 'np.roll'
-            phiPad = -1 * np.ones((1,conf.NbinsPhi))
+            phiPad = -1 * np.ones((1,kwargs['NbinsPhi']))
             energies = np.concatenate( (phiPad,energies,phiPad) )
 
             #remove padding
@@ -66,7 +66,7 @@ def seeding():
 
             energies = energies[slc]
 
-            maxima = ( (energies > conf.histoThreshold ) &
+            maxima = ( (energies > kwargs['histoThreshold'] ) &
                        (energies >= south) & (energies > north) &
                        (energies >= east) & (energies > west) &
                        (energies >= northeast) & (energies > northwest) &
@@ -76,8 +76,8 @@ def seeding():
 
             res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
 
-            assert(len(conf.FesAlgos)==1)
-            event_number = re.search('{}_([0-9]{{1,7}})_group'.format(conf.FesAlgos[0]),
+            assert(len(kwargs['FesAlgos'])==1)
+            event_number = re.search('{}_([0-9]{{1,7}})_group'.format(kwargs['FesAlgos'][0]),
                                                                     key).group(1)
             print('Ev:{}'.format(event_number))
             print('Seeds bins: {}'.format(seeds_idx))
@@ -91,4 +91,4 @@ def seeding():
     storeIn.close()
     storeOut.close()
 
-seeding()
+# seeding()

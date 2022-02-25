@@ -12,8 +12,8 @@ def validation(mipPts, event, infile, outfile):
     """
     compares all values of 2d histogram between local and CMSSW versions
     """
-    flocal  = open('outLocalBeforeSeeding.txt', 'w')
-    fremote = open('outCMSSWSmoothBeforeSeeding.txt', 'r')
+    flocal  = open(infile, 'w')
+    fremote = open(outfile, 'r')
     lines = fremote.readlines()
 
     for line in lines:
@@ -26,7 +26,6 @@ def validation(mipPts, event, infile, outfile):
         val_local = mipPts[bin1,bin2]
         if abs(val_remote-val_local)>0.0001:
             print('Diff found! Bin1={}\t Bin2={}\tRemote={}\tLocal={}'.format(bin1, bin2, val_remote, val_local))
-            
 
     for bin1 in range(conf.NbinsRz):
         for bin2 in range(conf.NbinsPhi):
@@ -42,10 +41,10 @@ def seeding():
 
         for key in keys:
             energies, weighted_x, weighted_y = storeIn[key]
-            if '187544' in key:
-                 validation(energies, '187544',
-                            infile='outLocalBeforeSeeding.txt',
-                            outfile='outCMSSWBeforeSeeding.txt')
+            # if '187544' in key:
+            #      validation(energies, '187544',
+            #                 infile='outLocalBeforeSeeding.txt',
+            #                 outfile='outCMSSWBeforeSeeding.txt')
 
             # add unphysical top and bottom R/z rows for edge cases
             # fill the rows with negative (unphysical) energy values
@@ -76,8 +75,6 @@ def seeding():
             seeds_idx = np.nonzero(maxima)
 
             res = (energies[seeds_idx], weighted_x[seeds_idx], weighted_y[seeds_idx])
-            # if '187603' in key: #'28274'
-            #     breakpoint()
 
             assert(len(conf.FesAlgos)==1)
             event_number = re.search('{}_([0-9]{{1,7}})_group'.format(conf.FesAlgos[0]),

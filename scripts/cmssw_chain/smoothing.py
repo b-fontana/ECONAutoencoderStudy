@@ -8,8 +8,8 @@ def valid1(energies, infile, outfile):
     """
     compares all values of 2d histogram between local and CMSSW versions
     """
-    flocal  = open('outLocalBeforeSmoothing.txt', 'w')
-    fremote = open('outCMSSWBeforeSmoothing.txt', 'r')
+    flocal  = open(infile, 'w')
+    fremote = open(outfile, 'r')
     lines = fremote.readlines()
 
     for line in lines:
@@ -22,7 +22,6 @@ def valid1(energies, infile, outfile):
         val_local = energies[bin1,bin2]
         if abs(val_remote-val_local)>0.001:
             print('Diff found! Bin1={}\t Bin2={}\tRemote={}\tLocal={}'.format(bin1, bin2, val_remote, val_local))
-
     for bin1 in range(conf.NbinsRz):
         for bin2 in range(conf.NbinsPhi):
             flocal.write('{}\t{}\t{}\n'.format(bin1, bin2, np.around(energies[bin1,bin2], 6)))
@@ -166,11 +165,10 @@ for falgo in conf.FesAlgos:
         weighted_x = createHistogram( storeIn[key][:,[0,1,3]] )
         weighted_y = createHistogram( storeIn[key][:,[0,1,4]] )
 
-        if '187544' in key:
-            valid1(energies,
-                   infile='outLocalBeforeSmoothing.txt',
-                   outfile='outCMSSWBeforeSmoothing.txt')
-
+        # if '187544' in key:
+        #     valid1(energies,
+        #            infile='outLocalBeforeSmoothing.txt',
+        #            outfile='outCMSSWBeforeSmoothing.txt')
             #validation('outLocalBeforeSmoothing.txt', energies)
         
         #printHistogram(ev)

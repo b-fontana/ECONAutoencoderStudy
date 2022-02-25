@@ -76,6 +76,9 @@ def clustering():
                                  'cl3d_pos_z': 'z',
                                  'tc_mipPt':   'mipPt',
                                  'tc_pt':      'pt'}, inplace=True)
+
+            cl3d = cl3d[ cl3d.pt > conf.PtC3dThreshold ]
+            
             cl3d.x /= cl3d.mipPt
             cl3d.y /= cl3d.mipPt
             cl3d.z /= cl3d.mipPt
@@ -90,6 +93,7 @@ def clustering():
             cl3d['en']   = cl3d.pt*np.cosh(cl3d.eta)
 
             event_number = re.search('Threshold_([0-9]{1,7})_tc', key1)
+
             if not event_number:
                 raise ValueError('The event number was not extracted!')
             cl3d['event'] = event_number.group(1)
@@ -113,29 +117,32 @@ def validation():
             cmssw = storeInCMSSW[key2]
 
             event_number = re.search('Threshold_([0-9]{1,7})_cl', key1).group(1)
-            nlocal = len(local['phi'].to_numpy())
-            nremote = len(cmssw[:][0])
 
-            # print('Event: {}'.format(event_number))
-            # print('Custom: NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
-            #       .format(len(local['phi'].to_numpy()),
-            #               np.sort(local['eta'].to_numpy()),
-            #               np.sort(local['phi'].to_numpy()),
-            #               np.sort(local['Rz'].to_numpy()),
-            #               np.sort(local['en'].to_numpy())))
-            # print('CMSSW:  NClusters={}\tEta={}\tPhi={}\tRz={}\tEnergy={}'
-            #       .format(len(cmssw[:][0]),
-            #               np.sort(cmssw[:][0]),
-            #               np.sort(cmssw[:][1]),
-            #               np.sort(cmssw[:][2]),
-            #               np.sort(cmssw[:][3])))
-            # print()
+            locEta = np.sort(local['eta'].to_numpy())
+            locPhi = np.sort(local['phi'].to_numpy())
+            locRz  = np.sort(local['Rz'].to_numpy())
+            locEn  = np.sort(local['en'].to_numpy())
+            remEta = np.sort(cmssw[:][0])
+            remPhi = np.sort(cmssw[:][1])
+            remRz  = np.sort(cmssw[:][2])
+            remEn  = np.sort(cmssw[:][3])
 
-            if (nlocal != nremote):
-                print('Event:{}\tNlocal={}\tNremote={}'.format(event_number, nlocal, nremote))
+            assert( len(locEta) == len(remEta) )
+            assert( len(locPhi) == len(remPhi) )
+            assert( len(locRz) == len(remRz) )
+            assert( len(locEn) == len(remEn) )
 
-
-
+            errorThreshold = .5E-3
+            for i in range(len(locEta)):
+                if ( abs(locEta[i] - remEta[i]) > errorThreshold or
+                     abs(locPhi[i] - remPhi[i]) > errorThreshold or
+                     abs(locRz[i]  - remRz[i])  > errorThreshold  or
+                     abs(locEn[i]  - remEn[i])  > errorThreshold ):
+                    print('Difference found in event {}!'.format(event_number))
+                    print('\tEta difference: {}'.format(locEta[i] - remEta[i]))
+                    print('\tPhi difference: {}'.format(locPhi[i] - remPhi[i]))
+                    print('\tRz difference: {}'.format(locRz[i] - remRz[i]))
+                    print('\tEn difference: {}'.format(locEn[i] - remEn[i]))
 
     storeInLocal.close()
     storeInCMSSW.close()

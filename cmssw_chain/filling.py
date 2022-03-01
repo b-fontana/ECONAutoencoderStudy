@@ -129,6 +129,7 @@ def filling(**kwargs):
         for i,(_k,(df_3d,df_tc)) in enumerate(simAlgoPlots.items()):
             for ev in df_tc['event'].unique():
                 ev_tc = df_tc[ df_tc.event == ev ]
+                breakpoint()
                 ev_3d = df_3d[ df_3d.event == ev ]
 
                 _simCols_tc = ['tc_phi_bin', 'Rz_bin', 'tc_layer',
@@ -176,4 +177,5 @@ def filling(**kwargs):
                 store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep
                 store[str(_k) + '_' + str(ev) + '_tc'].attrs['doc'] = 'Trigger Cells Info'
 
-# filling()
+
+filling()

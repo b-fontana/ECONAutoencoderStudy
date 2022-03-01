@@ -176,4 +176,6 @@ def filling(**kwargs):
                 store[str(_k) + '_' + str(ev) + '_tc'].attrs['columns'] = cols_to_keep
                 store[str(_k) + '_' + str(ev) + '_tc'].attrs['doc'] = 'Trigger Cells Info'
 
-# filling()
+if __name__ == "__main__":
+    from airflow.airflow_dag import filling_kwargs        
+    filling( **filling_kwargs )

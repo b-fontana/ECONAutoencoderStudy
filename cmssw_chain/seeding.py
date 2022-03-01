@@ -35,7 +35,8 @@ def seeding(**kwargs):
 
     for falgo in kwargs['FesAlgos']:
         keys = [x for x in storeIn.keys() if falgo in x]
-        print(keys)
+        if kwargs['Debug']:
+            print(keys)
 
         for key in keys:
             energies, weighted_x, weighted_y = storeIn[key]
@@ -79,10 +80,12 @@ def seeding(**kwargs):
             assert(len(kwargs['FesAlgos'])==1)
             event_number = re.search('{}_([0-9]{{1,7}})_group'.format(kwargs['FesAlgos'][0]),
                                                                     key).group(1)
-            print('Ev:{}'.format(event_number))
-            print('Seeds bins: {}'.format(seeds_idx))
-            print('NSeeds={}\tMipPt={}\tX={}\tY={}\n'
-                  .format(len(res[0]), res[0], res[1], res[2]) )
+
+            if kwargs['Debug']:
+                print('Ev:{}'.format(event_number))
+                print('Seeds bins: {}'.format(seeds_idx))
+                print('NSeeds={}\tMipPt={}\tX={}\tY={}\n'
+                      .format(len(res[0]), res[0], res[1], res[2]) )
 
             storeOut[key] = res
             storeOut[key].attrs['columns'] = ['seedEn', 'seedX', 'seedY']
@@ -91,4 +94,6 @@ def seeding(**kwargs):
     storeIn.close()
     storeOut.close()
 
-# seeding()
+if __name__ == "__main__":
+    from airflow.airflow_dag import seeding_kwargs        
+    seeding( **seeding_kwargs )

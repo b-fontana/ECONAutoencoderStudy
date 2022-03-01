@@ -53,5 +53,5 @@ fes = [ 'ThresholdDummyHistomaxnoareath20',
 ntuple_template = 'Floatingpoint{fe}Genclustersntuple/HGCalTriggerNtuple'
 algo_trees = {}
 for fe in fes:
-    algo_trees[fe] = ntuple_template.format(fe=fe, be=be)
+    algo_trees[fe] = ntuple_template.format(fe=fe)
     assert(algo_trees[fe] == gen_tree) #remove ass soon as other algorithms are considered

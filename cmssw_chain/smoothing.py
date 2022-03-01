@@ -124,7 +124,6 @@ def smoothing(**kwargs):
         keys = [x for x in storeIn.keys() if falgo in x and '_group' in x]
 
         for key in keys:
-            #print(key)
             energies   = createHistogram( storeIn[key][:,[0,1,2]],
                                           kwargs['NbinsRz'], kwargs['NbinsPhi'] )
             weighted_x = createHistogram( storeIn[key][:,[0,1,3]],
@@ -138,16 +137,16 @@ def smoothing(**kwargs):
             #            outfile='outCMSSWBeforeSmoothing.txt')
 
             #printHistogram(ev)
-            
+
             energies = smoothAlongPhi(
                 energies,
-                kwargs['binSums'],
-                kwargs['nbinsRz'],
-                kwargs['nbinsPhi'],
-                kwargs['seedsNormByArea'],
-                kwargs['minROverZ'],
-                kwargs['maxROverZ'],
-                kwargs['areaPerTriggerCell']
+                kwargs['BinSums'],
+                kwargs['NbinsRz'],
+                kwargs['NbinsPhi'],
+                kwargs['SeedsNormByArea'],
+                kwargs['MinROverZ'],
+                kwargs['MaxROverZ'],
+                kwargs['AreaPerTriggerCell']
             )
 
             # if '187544' in key:
@@ -159,8 +158,8 @@ def smoothing(**kwargs):
             
             energies = smoothAlongRz(
                 energies,
-                kwargs['nbinsRz'],
-                kwargs['nbinsPhi'],
+                kwargs['NbinsRz'],
+                kwargs['NbinsPhi'],
             )
 
             #printHistogram(ev)
@@ -172,4 +171,6 @@ def smoothing(**kwargs):
     storeIn.close()
     storeOut.close()
 
-# smoothing()
+if __name__ == "__main__":
+    from airflow.airflow_dag import smoothing_kwargs        
+    smoothing( **smoothing_kwargs )

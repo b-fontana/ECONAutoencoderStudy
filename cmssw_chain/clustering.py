@@ -5,7 +5,7 @@ import h5py
 from utils import calculateRoverZfromEta
 
 def clustering(**kwargs):
-    storeInSeeds  = h5py.File(kwargs['SeedingOut'], mode='r')
+    storeInSeeds  = h5py.File(kwargs['ClusteringInSeeds'], mode='r')
     storeInTC  = h5py.File(kwargs['ClusteringInTC'], mode='r')
     storeOut = pd.HDFStore(kwargs['ClusteringOut'], mode='w')
 
@@ -100,5 +100,6 @@ def clustering(**kwargs):
     storeInTC.close()
     storeOut.close()
 
-########################################################################
-# clustering()
+if __name__ == "__main__":
+    from airflow.airflow_dag import clustering_kwargs        
+    clustering( **clustering_kwargs )

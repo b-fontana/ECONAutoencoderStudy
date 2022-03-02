@@ -83,7 +83,7 @@ binConv = lambda vals,dist,amin : (vals*dist) + (dist/2) + amin
 
 SHIFTH, SHIFTV = binDistPhi, binDistRz
 
-tcDataPath = os.path.join(os.environ['HOME'], 'Downloads', 'test_triggergeom.root')
+tcDataPath = os.path.join(os.environ['HOME'], 'Documents/LLR/FPGAs/CodeRepository/data', 'test_triggergeom.root')
 tcFile = up.open(tcDataPath)
 tcFolder = 'hgcaltriggergeomtester'
 tcTreeName = 'TreeTriggerCells'

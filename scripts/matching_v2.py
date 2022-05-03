@@ -51,7 +51,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
     branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_mipPt', 'tc_pt', 'tc_layer',
-                    'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta' ]
+                    'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta', 'tc_id' ]
 
     batches_gen, batches_tc = ([] for _ in range(2))
     memsize_gen, memsize_tc = '128 MB', '64 MB'
@@ -104,6 +104,7 @@ event
     for algo_name, algo_tree in algo_trees.items():
         with uproot.open(filename)[algo_tree] as tree:
             df_algos[algo_name] = tree.arrays(branches_cl3d, library='pd')
+            breakpoint()
             # Trick to read layers pTs, which is a vector of vector
             df_algos[algo_name]['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
 

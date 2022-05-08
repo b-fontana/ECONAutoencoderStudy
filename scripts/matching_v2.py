@@ -52,7 +52,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
     branches_cl3d = [ 'event', 'cl3d_energy','cl3d_pt','cl3d_eta','cl3d_phi' ]
     branches_tc = [ 'event', 'tc_zside', 'tc_energy', 'tc_mipPt', 'tc_pt', 'tc_layer',
                     'tc_x', 'tc_y', 'tc_z', 'tc_phi', 'tc_eta', 'tc_id' ]
-
+    
     batches_gen, batches_tc = ([] for _ in range(2))
     memsize_gen, memsize_tc = '128 MB', '64 MB'
     for filename in files:
@@ -60,7 +60,6 @@ def create_dataframes(files, algo_trees, gen_tree, p):
             #print( data.num_entries_for(memsize, expressions=branches_tc) )
             for ib,batch in enumerate(data.iterate(branches_gen, step_size=memsize_gen,
                                                    library='pd')):
-
                 # reachedEE=2: photons that hit HGCAL
                 batch = batch[ batch['genpart_reachedEE']==p.reachedEE ]
                 batch = batch[ batch['genpart_gen']!=-1 ]
@@ -72,10 +71,10 @@ def create_dataframes(files, algo_trees, gen_tree, p):
 
                 batches_gen.append(batch)
                 print('Step {}: +{} generated data processed.'.format(ib,memsize_gen))
-
+                
             for ib,batch in enumerate(data.iterate(branches_tc, step_size=memsize_tc,
                                                    library='pd')):
-
+                
                 batch = batch[ batch['tc_zside']==1 ] #positive endcap
                 batch = batch.drop(columns=['tc_zside'])
                 #remove layers not read by trigger cells
@@ -88,25 +87,23 @@ def create_dataframes(files, algo_trees, gen_tree, p):
     df_gen = pd.concat(batches_gen)
     df_tc = pd.concat(batches_tc)
     
-    """ This concatenation looks like:
-       genpart_exphi  genpart_exeta  genpart_energy  tc_layer       tc_x        tc_y        tc_z
-event                                                                                           
-5           0.972961       -1.75371       47.971615      29.0  63.632179  112.073677 -367.699005
-5           0.972961       -1.75371       47.971615      21.0 -56.870522 -106.310326  351.802765
-5           0.972961       -1.75371       47.971615      19.0 -63.112049 -107.511497  348.832764
-5           0.972961       -1.75371       47.971615       3.0 -67.323067  -95.413071  325.072754
-(...)
-6
-(...)
-    """
-
     df_algos = {}
+    assert len(files)==1 #modify the following block otherwise
     for algo_name, algo_tree in algo_trees.items():
         with uproot.open(filename)[algo_tree] as tree:
-            df_algos[algo_name] = tree.arrays(branches_cl3d, library='pd')
-            breakpoint()
-            # Trick to read layers pTs, which is a vector of vector
-            df_algos[algo_name]['cl3d_layer_pt'] = list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()))
+            df_algos[algo_name] = tree.arrays(branches_cl3d + ['cl3d_layer_pt'], library='pd')
+            df_algos[algo_name].reset_index(inplace=True)
+            
+            # Trick to expand layers pTs, which is a vector of vector
+            newcol = df_algos[algo_name].apply(lambda row: row.cl3d_layer_pt[row.subentry], axis=1)
+            df_algos[algo_name]['cl3d_layer_pt'] = newcol
+            df_algos[algo_name] = df_algos[algo_name].drop(['subentry', 'entry'], axis=1)
+            
+            # print(list(chain.from_iterable(tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist())))
+            # new_column = chain.from_iterable(
+            #     tree.arrays(['cl3d_layer_pt'])[b'cl3d_layer_pt'].tolist()
+            #     )
+            # df_algos[algo_name]['cl3d_layer_pt'] = list( new_column )
 
     return (df_gen, df_algos, df_tc)
 
@@ -172,8 +169,6 @@ def preprocessing(param):
         #algo_clean[algo_name]=pd.concat([algo_neg_merged,algo_pos_merged], sort=False).sort_values('event')
         algo_clean[algo_name] = algo_pos_merged.sort_values('event')
         algo_clean[algo_name] = algo_clean[algo_name].join(tc, how='left', rsuffix='_tc')
-        
-        print(algo_name, algo_clean[algo_name].shape[0])
 
 
     #save files to savedir in HDF

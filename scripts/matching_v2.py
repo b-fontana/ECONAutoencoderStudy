@@ -45,7 +45,7 @@ def matching(event):
         return (cond_a&cond_b)
 
 def create_dataframes(files, algo_trees, gen_tree, p):
-    print('Input files: {}'.format(files))
+    print('Input files: {}'.format(files), flush=True)
 
     branches_gen = [ 'event', 'genpart_reachedEE', 'genpart_pid', 'genpart_gen',
                      'genpart_exphi', 'genpart_exeta', 'genpart_energy' ]
@@ -70,7 +70,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
                 batch.set_index('event', inplace=True)
 
                 batches_gen.append(batch)
-                print('Step {}: +{} generated data processed.'.format(ib,memsize_gen))
+                print('Step {}: +{} generated data processed.'.format(ib,memsize_gen), flush=True)
                 
             for ib,batch in enumerate(data.iterate(branches_tc, step_size=memsize_tc,
                                                    library='pd')):
@@ -82,7 +82,7 @@ def create_dataframes(files, algo_trees, gen_tree, p):
                 #convert all the trigger cell hits in each event to a list
                 batch = batch.groupby(by=['event']).aggregate(lambda x: list(x))
                 batches_tc.append(batch)
-                print('Step {}: +{} trigger cells data processed.'.format(ib,memsize_tc))
+                print('Step {}: +{} trigger cells data processed.'.format(ib,memsize_tc), flush=True)
 
     df_gen = pd.concat(batches_gen)
     df_tc = pd.concat(batches_tc)
